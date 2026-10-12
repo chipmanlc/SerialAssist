@@ -16,5 +16,8 @@ TestResults/
 .idea/
 *.swp
 
+# 本地辅助脚本(不上传)
+提交推送.bat
+
 # 运行时数据(便携 data 目录)
 data/
