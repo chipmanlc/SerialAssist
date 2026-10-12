@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="SerialAssist.Core.Tests/SerialAssist.Core.Tests.csproj" />
+  <Project Path="SerialAssist.Core/SerialAssist.Core.csproj" />
+  <Project Path="SerialAssist.Transport.Tests/SerialAssist.Transport.Tests.csproj" />
+  <Project Path="SerialAssist.Transport/SerialAssist.Transport.csproj" />
+  <Project Path="SerialAssist.UI/SerialAssist.UI.csproj" />
+</Solution>

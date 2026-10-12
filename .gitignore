@@ -1,0 +1,20 @@
+# .NET 编译产物
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+
+# 发布产物(单文件 exe 太大,不进仓库,用 Releases 发)
+publish/
+
+# 测试结果
+TestResults/
+*.trx
+
+# IDE
+.vs/
+.idea/
+*.swp
+
+# 运行时数据(便携 data 目录)
+data/
