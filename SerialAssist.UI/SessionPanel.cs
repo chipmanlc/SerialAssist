@@ -107,13 +107,13 @@ internal sealed class SessionPanel : UserControl
             ReRenderAll();
             UpdateSendPreview(); // 发送区与接收区共用编码,切换后预览同步重投影
         };
-        var jumpLatestButton = new Button { Text = "⤓ 最新", Width = 64, Height = 24 };
+        var jumpLatestButton = new Button { Text = "跳到最新", Width = 76, Height = 24 };
         jumpLatestButton.Click += (_, _) =>
         {
             _receiveBox.SelectionStart = _receiveBox.TextLength;
             _receiveBox.ScrollToCaret();
         };
-        var clearRecvButton = new Button { Text = "清空", Width = 60, Height = 24 };
+        var clearRecvButton = new Button { Text = "清除屏幕&&回滚", Width = 112, Height = 24 };
         clearRecvButton.Click += OnClearReceive;
         _logCheck = new CheckBox { Text = "记录日志", AutoSize = true };
         _logCheck.CheckedChanged += OnLogToggled;
@@ -134,14 +134,13 @@ internal sealed class SessionPanel : UserControl
         _receiveBox.MouseEnter += (_, _) =>
         {
             _frozen = true;
-            UpdateStatus("已暂停", Color.DarkOrange);
+            UpdateStatus("悬停预览中", Color.DarkOrange);
         };
         _receiveBox.MouseLeave += (_, _) =>
         {
             _frozen = false;
-            // 必须显式恢复状态文字:RenderNewEntries 无新数据时提前 return,不会清掉"已暂停"
-            var (text, color) = DescribeState(_session.State);
-            UpdateStatus(text, color);
+            // 离开悬停只清掉"悬停预览中",不回显"已打开 COMx"(页签已有端口名,常态提示是噪音)
+            UpdateStatus(string.Empty, Color.DimGray);
             RenderNewEntries();
         };
 
@@ -356,7 +355,7 @@ internal sealed class SessionPanel : UserControl
 
         if (_frozen)
         {
-            return; // 状态栏保持 MouseEnter 写入的"已暂停",不再刷缓冲条数
+            return; // 状态栏保持 MouseEnter 写入的"悬停预览中",不再刷缓冲条数
         }
 
         var viewFrom = Math.Max(_renderedSeq, firstSeq);
