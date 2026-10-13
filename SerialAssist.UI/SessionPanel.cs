@@ -25,6 +25,7 @@ internal sealed class SessionPanel : UserControl
     private const int LogBudgetPerTick = 4_000; // 单轮最多写日志行数,防洪流时写盘拖死 UI 线程(欠账下轮追)
     private SessionLogger? _logger;
     private bool _frozen;
+    private bool _scrollBackHint;
     private bool _suppressLogDialog;
     private bool _suppressRadioConvert;
 
@@ -358,6 +359,23 @@ internal sealed class SessionPanel : UserControl
             return; // 状态栏保持 MouseEnter 写入的"悬停预览中",不再刷缓冲条数
         }
 
+        // 回滚看历史提示:视图离底即提示"回滚预览中",拖回底部自动清除。
+        // 每 tick 都检测(无新数据也要响应用户拖滚动条);悬停冻结时由"悬停预览中"接管。
+        var atBottom = IsViewAtBottom();
+        if (!atBottom)
+        {
+            if (!_scrollBackHint)
+            {
+                _scrollBackHint = true;
+                UpdateStatus("回滚预览中", Color.DarkOrange);
+            }
+        }
+        else if (_scrollBackHint)
+        {
+            _scrollBackHint = false;
+            UpdateStatus(string.Empty, Color.DimGray);
+        }
+
         var viewFrom = Math.Max(_renderedSeq, firstSeq);
         var backlog = (int)(entries.Count - (viewFrom - firstSeq));
         var plan = RenderPolicy.Plan(backlog);
@@ -368,9 +386,8 @@ internal sealed class SessionPanel : UserControl
             return;
         }
 
-        // 关键:在追加前记住用户位置。只有"本来就在底部"才跟随滚动;
+        // 关键:上面已取过"是否在底部"(atBottom)。只有"本来就在底部"才跟随滚动;
         // 用户拖回滚条看历史时,新数据静默追加,绝不把视图拽回底部。
-        var atBottom = IsViewAtBottom();
 
         var showHex = _recvHexRadio.Checked;
         var showTs = _timestampCheck.Checked;
@@ -389,7 +406,7 @@ internal sealed class SessionPanel : UserControl
 
         if (_receiveBox.TextLength + sb.Length > MaxViewChars)
         {
-            _receiveBox.Clear();
+            ClearReceiveBoxPreserveZoom();
             UpdateStatus("视图过长已清屏(数据仍在管线中)", Color.DarkOrange);
         }
         _receiveBox.AppendText(sb.ToString());
@@ -410,15 +427,23 @@ internal sealed class SessionPanel : UserControl
         {
             return;
         }
-        _receiveBox.Clear();
+        ClearReceiveBoxPreserveZoom();
         _renderedSeq = _pipeline.FirstSequence; // 从管线最旧开始重投影(单轮预算限量,多轮追完)
         RenderNewEntries();
+    }
+
+    /// <summary>清空接收框但保留 Ctrl+滚轮缩放:RichEdit 在文本被清空时会把 ZoomFactor 重置回 100%。</summary>
+    private void ClearReceiveBoxPreserveZoom()
+    {
+        var zoom = _receiveBox.ZoomFactor;
+        _receiveBox.Clear();
+        _receiveBox.ZoomFactor = zoom;
     }
 
     private void OnClearReceive(object? sender, EventArgs e)
     {
         _pipeline.Clear();
-        _receiveBox.Clear();
+        ClearReceiveBoxPreserveZoom();
         _renderedSeq = 0;
         _loggedSeq = 0;
     }
