@@ -26,6 +26,8 @@ internal sealed class SessionPanel : UserControl
     private SessionLogger? _logger;
     private bool _frozen;
     private bool _scrollBackHint;
+    private float _savedZoom = 1f;
+    private bool _zoomRestorePending;
     private bool _suppressLogDialog;
     private bool _suppressRadioConvert;
 
@@ -410,6 +412,15 @@ internal sealed class SessionPanel : UserControl
             UpdateStatus("视图过长已清屏(数据仍在管线中)", Color.DarkOrange);
         }
         _receiveBox.AppendText(sb.ToString());
+        if (_zoomRestorePending)
+        {
+            // 清屏后第一次追加数据:此刻 RichEdit 已把缩放打回 100%,还原用户之前的缩放
+            _zoomRestorePending = false;
+            if (Math.Abs(_receiveBox.ZoomFactor - _savedZoom) > 0.01f)
+            {
+                _receiveBox.ZoomFactor = _savedZoom;
+            }
+        }
         if (plan.Skip > 0)
         {
             UpdateStatus($"数据量过大,视图跳过 {plan.Skip} 条(接收日志仍完整)", Color.DarkOrange);
@@ -432,12 +443,16 @@ internal sealed class SessionPanel : UserControl
         RenderNewEntries();
     }
 
-    /// <summary>清空接收框但保留 Ctrl+滚轮缩放:RichEdit 在文本被清空时会把 ZoomFactor 重置回 100%。</summary>
+    /// <summary>
+    /// 清空接收框但保留 Ctrl+滚轮缩放。RichEdit 的缩放重置有两次:Clear() 清空时一次,
+    /// 空到非空的第一次 AppendText 又一次——当场还原无效,只能记下缩放值,
+    /// 标记挂起,等下一拍追加数据后在 RenderNewEntries 里还原。
+    /// </summary>
     private void ClearReceiveBoxPreserveZoom()
     {
-        var zoom = _receiveBox.ZoomFactor;
+        _savedZoom = _receiveBox.ZoomFactor;
+        _zoomRestorePending = true;
         _receiveBox.Clear();
-        _receiveBox.ZoomFactor = zoom;
     }
 
     private void OnClearReceive(object? sender, EventArgs e)
