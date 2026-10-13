@@ -569,10 +569,14 @@ internal sealed class SessionPanel : UserControl
         _previewLabel.Text = preview.Length == 0 ? "预览:" : $"预览: {preview}";
     }
 
-    /// <summary>选定文件按原始字节发送(2026-10-12 用户新增);状态栏显示开头字节的 HEX 预览供核对。</summary>
+    /// <summary>
+    /// 选定文件发送(2026-10-12 用户新增,2026-10-13 修订):文本模式 = 文件原始字节 + 行尾下拉所选结尾
+    /// (选"无"即纯原始字节);HEX 模式 = 纯原始字节(字节精确,行尾不掺入,与发送框规则一致)。
+    /// 状态栏显示开头字节的 HEX 预览供核对。
+    /// </summary>
     private void OnSendFileClicked(object? sender, EventArgs e)
     {
-        using var dialog = new OpenFileDialog { Title = "选择要发送的文件(按原始字节发送)" };
+        using var dialog = new OpenFileDialog { Title = "选择要发送的文件" };
         if (dialog.ShowDialog(this) != DialogResult.OK)
         {
             return;
@@ -593,12 +597,32 @@ internal sealed class SessionPanel : UserControl
             UpdateStatus("文件为空,未发送", Color.DarkOrange);
             return;
         }
-        if (_session.Send(bytes))
+
+        // 文本模式下按行尾下拉追加结尾;HEX 模式直发原始字节
+        var fileBytes = bytes;
+        var endingNote = string.Empty;
+        if (_sendTextRadio.Checked)
+        {
+            var ending = NewlineOptions.FromIndex(_lineEndingCombo.SelectedIndex) switch
+            {
+                NewlineMode.CR => new byte[] { 0x0D },
+                NewlineMode.LF => new byte[] { 0x0A },
+                NewlineMode.CRLF => new byte[] { 0x0D, 0x0A },
+                _ => Array.Empty<byte>(),
+            };
+            if (ending.Length > 0)
+            {
+                fileBytes = [.. bytes, .. ending];
+                endingNote = ",含行尾";
+            }
+        }
+
+        if (_session.Send(fileBytes))
         {
             // HEX 预览头 16 字节,核对"发出去的到底是什么"
-            var head = HexCodec.ToHexString(bytes[..Math.Min(16, bytes.Length)]);
-            var ellipsis = bytes.Length > 16 ? " …" : string.Empty;
-            UpdateStatus($"已发送 {Path.GetFileName(dialog.FileName)}({bytes.Length} 字节):{head}{ellipsis}", Color.DimGray);
+            var head = HexCodec.ToHexString(fileBytes[..Math.Min(16, fileBytes.Length)]);
+            var ellipsis = fileBytes.Length > 16 ? " …" : string.Empty;
+            UpdateStatus($"已发送 {Path.GetFileName(dialog.FileName)}({fileBytes.Length} 字节{endingNote}):{head}{ellipsis}", Color.DimGray);
         }
         else
         {
