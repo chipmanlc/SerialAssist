@@ -34,6 +34,8 @@ internal sealed class FramePanel : UserControl
         _sender = sender;
         _encoding = encoding ?? (() => Encoding.GetEncoding("GBK"));
         _targetName = targetName ?? (() => null);
+        // 字体按用户要求用 Times New Roman(西文衬线;中文字形系统自动回退,整体偏传统纸质感)
+        Font = new Font("Times New Roman", 10f);
 
         _newButton = new Button { Text = "新增", Width = 56 };
         _editButton = new Button { Text = "编辑", Width = 56 };
