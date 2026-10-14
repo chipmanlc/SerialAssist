@@ -104,13 +104,19 @@ internal sealed class MainForm : Form
         }
     }
 
-    /// <summary>活动窗口变化后刷新共享发送区的目标串口(编码用委托实时取)。</summary>
+    private SessionPanel? _sendTargetSession; // 共享发送区当前目标,只在点到串口窗口时更新
+
+    /// <summary>活动窗口变化后刷新共享发送区的目标串口(编码用委托实时取)。
+    /// 活动内容为空不清目标:点击共享发送区本身时 DPS 会把 ActiveContent 置空,清了目标就丢。</summary>
     private void RefreshSendTarget()
     {
         var session = ActiveSession;
-        _sharedSend.SetTarget(session is null
-            ? null
-            : new SendTarget(session.TargetName, session.TrySend, () => session.TextEncoding));
+        if (session is null)
+        {
+            return;
+        }
+        _sendTargetSession = session;
+        _sharedSend.SetTarget(new SendTarget(session.TargetName, session.TrySend, () => session.TextEncoding));
     }
 
     /// <summary>
@@ -184,6 +190,12 @@ internal sealed class MainForm : Form
         {
             _sessionContents.Remove(panel);
             _sessionOrder.Remove(panel);
+            if (_sendTargetSession == panel)
+            {
+                // 关掉的正是发送目标:清掉,别留一个指向已销毁面板的悬空目标
+                _sendTargetSession = null;
+                _sharedSend.SetTarget(null);
+            }
             RefreshSendTarget();
             if (_framePanels.Remove(panel, out var frameContent))
             {
