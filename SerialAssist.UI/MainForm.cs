@@ -87,7 +87,8 @@ internal sealed class MainForm : Form
         }
     }
 
-    /// <summary>当前点选的会话:活动内容是串口面板则直接用;是某个会话的数据帧面板则归属其会话。</summary>
+    /// <summary>当前点选的会话:活动内容是串口面板则直接用;是某个会话的数据帧面板则归属其会话。
+    /// 必须校验会话仍在册:FormClosed 时 DPS 可能还没切走 ActiveContent,否则会选中正在销毁的面板。</summary>
     private SessionPanel? ActiveSession
     {
         get
@@ -98,9 +99,10 @@ internal sealed class MainForm : Form
             }
             if (content.Controls.Count > 0 && content.Controls[0] is SessionPanel session)
             {
-                return session;
+                return _sessionContents.ContainsKey(session) ? session : null;
             }
-            return _framePanels.FirstOrDefault(kv => kv.Value == content).Key;
+            var owner = _framePanels.FirstOrDefault(kv => kv.Value == content).Key;
+            return owner is not null && _sessionContents.ContainsKey(owner) ? owner : null;
         }
     }
 
@@ -196,7 +198,9 @@ internal sealed class MainForm : Form
                 _sendTargetSession = null;
                 _sharedSend.SetTarget(null);
             }
-            RefreshSendTarget();
+            // 不能同步刷:此刻 ActiveContent 可能还指着正在关闭的内容,会又把将死面板选成目标;
+            // 等 DPS 完成关闭、ActiveContent 落定后再刷
+            BeginInvoke(RefreshSendTarget);
             if (_framePanels.Remove(panel, out var frameContent))
             {
                 frameContent.Close(); // 会话关了,它的帧面板跟着关
@@ -232,7 +236,7 @@ internal sealed class MainForm : Form
             return;
         }
 
-        var framePanel = new FramePanel(panel.Frames, panel.SendFrameBytes, panel.TextEncoding);
+        var framePanel = new FramePanel(panel.Frames, panel.SendFrameBytes, () => panel.TextEncoding);
         var content = new DockContent
         {
             Text = $"数据帧 {panel.DisplayPortName}",

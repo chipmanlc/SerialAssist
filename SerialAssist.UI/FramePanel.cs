@@ -11,7 +11,8 @@ internal sealed class FramePanel : UserControl
 {
     private readonly FrameStore _store;
     private readonly Func<byte[], bool> _sender;
-    private readonly Encoding _encoding;
+    // 编码用委托实时取:会话面板改编码后,帧文本模式必须跟着变,快照会发错字节
+    private readonly Func<Encoding> _encoding;
     private readonly ListView _list;
     private readonly Button _loopButton;
     private readonly Label _statusLabel;
@@ -25,11 +26,11 @@ internal sealed class FramePanel : UserControl
     private CancellationTokenSource? _loopCts;
     private bool _suppressCheckSync;
 
-    public FramePanel(FrameStore store, Func<byte[], bool> sender, Encoding? encoding = null)
+    public FramePanel(FrameStore store, Func<byte[], bool> sender, Func<Encoding>? encoding = null)
     {
         _store = store;
         _sender = sender;
-        _encoding = encoding ?? Encoding.GetEncoding("GBK");
+        _encoding = encoding ?? (() => Encoding.GetEncoding("GBK"));
 
         _newButton = new Button { Text = "新增", Width = 56 };
         _editButton = new Button { Text = "编辑", Width = 56 };
@@ -136,7 +137,7 @@ internal sealed class FramePanel : UserControl
 
     private void EditFrame(int index)
     {
-        using var dialog = new FrameEditDialog(index >= 0 ? _store.Frames[index] : null, _encoding);
+        using var dialog = new FrameEditDialog(index >= 0 ? _store.Frames[index] : null, _encoding());
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Result is null)
         {
             return;

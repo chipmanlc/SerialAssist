@@ -478,8 +478,14 @@ internal sealed class SessionPanel : UserControl
         _suppressLogDialog = true;
         _logCheck.Checked = true;
         _suppressLogDialog = false;
-        _logPathLabel.Text = $"日志:{Path.GetFileName(path)}";
+        _logPathLabel.Text = $"日志:{EllipsizeTail(path)}";
         UpdateStatus($"记录日志:{path}", Color.ForestGreen);
+    }
+
+    /// <summary>超长路径截中间留尾部(尾部是文件名,最有辨识度),防标签把工具栏撑爆。</summary>
+    private static string EllipsizeTail(string path)
+    {
+        return path.Length <= 72 ? path : "…" + path[^71..];
     }
 
     private void OnLogToggled(object? sender, EventArgs e)
