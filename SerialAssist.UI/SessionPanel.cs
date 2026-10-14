@@ -28,6 +28,8 @@ internal sealed class SessionPanel : UserControl
     private bool _scrollBackHint;
     private float _savedZoom = 1f;
     private bool _zoomRestorePending;
+    private bool _wasMinimized;
+    private bool _lastAtBottom = true;
     private bool _suppressLogDialog;
     private bool _suppressRadioConvert;
 
@@ -363,7 +365,38 @@ internal sealed class SessionPanel : UserControl
 
         // 回滚看历史提示:视图离底即提示"回滚预览中",拖回底部自动清除。
         // 每 tick 都检测(无新数据也要响应用户拖滚动条);悬停冻结时由"悬停预览中"接管。
-        var atBottom = IsViewAtBottom();
+        //
+        // 最小化坑:窗口最小化时客户区塌为 0,IsViewAtBottom 必误判"离底",
+        // 导致跟随中断;恢复后 ScrollToCaret 不会自动补,状态栏就永久卡在"回滚预览中"。
+        // 处理:最小化期间沿用最小化前的跟随状态(_lastAtBottom);
+        // 恢复后的第一拍,若最小化前本在底部,强制回底部对齐。
+        var form = FindForm();
+        var minimized = _receiveBox.ClientSize.Height <= 0
+            || form is { WindowState: FormWindowState.Minimized };
+        var justRestored = _wasMinimized && !minimized;
+        _wasMinimized = minimized;
+
+        bool atBottom;
+        if (justRestored)
+        {
+            atBottom = IsViewAtBottom();
+            if (_lastAtBottom && !atBottom)
+            {
+                _receiveBox.SelectionStart = _receiveBox.TextLength;
+                _receiveBox.ScrollToCaret();
+                atBottom = true;
+            }
+        }
+        else
+        {
+            atBottom = minimized || IsViewAtBottom();
+        }
+
+        if (!minimized)
+        {
+            _lastAtBottom = atBottom;
+        }
+
         if (!atBottom)
         {
             if (!_scrollBackHint)
