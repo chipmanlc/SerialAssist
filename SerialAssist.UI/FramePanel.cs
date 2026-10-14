@@ -280,7 +280,7 @@ internal sealed class FramePanel : UserControl
         _loopCts = cts;
         _loopButton.Text = "停止";
         SetBusy(true);
-        SetStatus("循环发送中…(以启动时的帧列表为准,改动需停止后重启循环)", Color.ForestGreen);
+        SetStatus("循环发送中…(发往当前点选的串口;以启动时的帧列表为准,改动需停止后重启循环)", Color.ForestGreen);
         var runner = new FrameRunner(_sender);
         // 快照必须在 UI 线程拍:FrameStore 是普通 List,线程池并发 ToArray 与 UI 改列表会竞态
         var snapshot = _store.Frames.ToArray();

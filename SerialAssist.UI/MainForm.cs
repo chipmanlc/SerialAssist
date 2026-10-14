@@ -1,4 +1,5 @@
 using SerialAssist.Core;
+using System.Text;
 using WeifenLuo.WinFormsUI.Docking;
 
 namespace SerialAssist.UI;
@@ -10,7 +11,8 @@ internal sealed class MainForm : Form
     private readonly SharedSendPanel _sharedSend;
     private readonly Dictionary<SessionPanel, DockContent> _sessionContents = new();
     private readonly List<SessionPanel> _sessionOrder = new(); // 创建顺序,平铺排版按它来(Dictionary 顺序不保证)
-    private readonly Dictionary<SessionPanel, DockContent> _framePanels = new();
+    private readonly FrameStore _frames = new(); // 全软件一个帧列表,随主窗体存活
+    private DockContent? _frameContent;
     private int _panelCount;
 
     public MainForm()
@@ -101,8 +103,7 @@ internal sealed class MainForm : Form
             {
                 return _sessionContents.ContainsKey(session) ? session : null;
             }
-            var owner = _framePanels.FirstOrDefault(kv => kv.Value == content).Key;
-            return owner is not null && _sessionContents.ContainsKey(owner) ? owner : null;
+            return null; // 数据帧面板是全局的,点它不算切换目标,保持上一个串口
         }
     }
 
@@ -187,7 +188,7 @@ internal sealed class MainForm : Form
         content.Show(_dockPanel, DockState.Document);
         _sessionContents[panel] = content;
         _sessionOrder.Add(panel);
-        panel.FramesRequested += () => OpenFramePanel(panel);
+        panel.FramesRequested += () => OpenFramePanel();
         content.FormClosed += (_, _) =>
         {
             _sessionContents.Remove(panel);
@@ -201,10 +202,6 @@ internal sealed class MainForm : Form
             // 不能同步刷:此刻 ActiveContent 可能还指着正在关闭的内容,会又把将死面板选成目标;
             // 等 DPS 完成关闭、ActiveContent 落定后再刷
             BeginInvoke(RefreshSendTarget);
-            if (_framePanels.Remove(panel, out var frameContent))
-            {
-                frameContent.Close(); // 会话关了,它的帧面板跟着关
-            }
             panel.Dispose();
             if (_dockPanel.Contents.Count == 0)
             {
@@ -227,31 +224,54 @@ internal sealed class MainForm : Form
         TileSessionWindows();
     }
 
-    /// <summary>打开某会话的报文帧面板:停靠在该会话 pane 右侧;已开则激活,不重复开。</summary>
-    private void OpenFramePanel(SessionPanel panel)
+    /// <summary>
+    /// 打开共享数据帧面板(全软件一个,2026-10-14 与发送区统一):帧发往「当前点选的串口」,
+    /// 与共享发送区同一目标;已开则激活。停靠在活动会话右侧,没有会话则作为文档窗。
+    /// </summary>
+    private void OpenFramePanel()
     {
-        if (_framePanels.TryGetValue(panel, out var existing) && !existing.IsDisposed)
+        if (_frameContent is { IsDisposed: false })
         {
-            existing.Activate();
+            _frameContent.Activate();
             return;
         }
 
-        var framePanel = new FramePanel(panel.Frames, panel.SendFrameBytes, () => panel.TextEncoding);
+        var framePanel = new FramePanel(_frames, bytes => _sendTargetSession?.TrySend(bytes) ?? false,
+            () => _sendTargetSession?.TextEncoding ?? GbkFallback());
         var content = new DockContent
         {
-            Text = $"数据帧 {panel.DisplayPortName}",
+            Text = "数据帧",
             CloseButton = true,
             CloseButtonVisible = true,
         };
         content.Controls.Add(framePanel);
         framePanel.Dock = DockStyle.Fill;
-        var sessionContent = _sessionContents[panel];
-        content.Show(sessionContent.Pane!, DockAlignment.Right, 0.4);
+        var session = ActiveSession;
+        if (session is not null && _sessionContents.TryGetValue(session, out var sessionContent) && sessionContent.Pane is not null)
+        {
+            content.Show(sessionContent.Pane, DockAlignment.Right, 0.4);
+        }
+        else
+        {
+            content.Show(_dockPanel, DockState.Document);
+        }
         content.FormClosed += (_, _) =>
         {
-            _framePanels.Remove(panel);
+            _frameContent = null;
             framePanel.Dispose();
         };
-        _framePanels[panel] = content;
+        _frameContent = content;
+    }
+
+    private static Encoding GbkFallback()
+    {
+        try
+        {
+            return Encoding.GetEncoding("GBK");
+        }
+        catch (ArgumentException)
+        {
+            return Encoding.ASCII;
+        }
     }
 }

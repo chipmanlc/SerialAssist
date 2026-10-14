@@ -48,11 +48,8 @@ internal sealed class SessionPanel : UserControl
     /// <summary>状态变化时上抛建议标题(如 "COM5 · 已打开"),供停靠面板标题用。</summary>
     public event Action<string>? TitleChanged;
 
-    /// <summary>用户请求打开本会话的报文帧面板(MainForm 据此停靠 FramePanel)。</summary>
+    /// <summary>用户请求打开数据帧面板(共享,MainForm 据此停靠 FramePanel)。</summary>
     public event Action? FramesRequested;
-
-    /// <summary>本会话的报文帧列表(P6),帧面板与会话共享同一份。</summary>
-    public FrameStore Frames { get; } = new();
 
     /// <summary>面板当前端口名(供帧面板标题等展示)。</summary>
     public string? DisplayPortName => _config?.PortName ?? _session.Config?.PortName;
@@ -540,7 +537,6 @@ internal sealed class SessionPanel : UserControl
     // ---------- 杂项 ----------
 
     /// <summary>帧面板的发送通道:任意线程可调(循环发送在后台任务里跑),内部无 UI 依赖。</summary>
-    public bool SendFrameBytes(byte[] bytes) => _session.Send(bytes);
 
     /// <summary>共享发送区通道:UI 线程调用,失败原因见 LastSendError(状态栏提示由共享发送区统一报)。</summary>
     public bool TrySend(byte[] bytes) => _session.Send(bytes);
