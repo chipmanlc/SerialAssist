@@ -12,7 +12,7 @@ internal sealed class MainForm : Form
     private readonly Dictionary<SessionPanel, DockContent> _sessionContents = new();
     private readonly List<SessionPanel> _sessionOrder = new(); // 创建顺序,平铺排版按它来(Dictionary 顺序不保证)
     private readonly FrameStore _frames = new(); // 全软件一个帧列表,随主窗体存活
-    private DockContent? _frameContent;
+    private Form? _frameForm; // 数据帧独立窗口(不进停靠体系,避免和串口窗口抢地方)
     private int _panelCount;
 
     public MainForm()
@@ -225,43 +225,33 @@ internal sealed class MainForm : Form
     }
 
     /// <summary>
-    /// 打开共享数据帧面板(全软件一个,2026-10-14 与发送区统一):帧发往「当前点选的串口」,
-    /// 与共享发送区同一目标;已开则激活。停靠在活动会话右侧,没有会话则作为文档窗。
+    /// 打开共享数据帧窗口(全软件一个,2026-10-14 与发送区统一):帧发往「当前点选的串口」,
+    /// 与共享发送区同一目标;已开则激活。独立悬浮窗,不进停靠体系——停靠会跟串口窗口
+    /// 共分/切换同一块区域,用户明确要求独立窗口。
     /// </summary>
     private void OpenFramePanel()
     {
-        if (_frameContent is { IsDisposed: false })
+        if (_frameForm is { IsDisposed: false })
         {
-            _frameContent.Activate();
+            _frameForm.Activate();
             return;
         }
 
         var framePanel = new FramePanel(_frames, bytes => _sendTargetSession?.TrySend(bytes) ?? false,
             () => _sendTargetSession?.TextEncoding ?? GbkFallback(),
-            () => _sendTargetSession?.TargetName);
-        var content = new DockContent
+            () => _sendTargetSession?.TargetName)
+        { Dock = DockStyle.Fill };
+        _frameForm = new Form
         {
             Text = "数据帧",
-            CloseButton = true,
-            CloseButtonVisible = true,
+            Size = new Size(560, 460),
+            StartPosition = FormStartPosition.CenterParent,
+            ShowInTaskbar = false, // 工具型小窗,不占任务栏
+            MinimizeBox = false,
         };
-        content.Controls.Add(framePanel);
-        framePanel.Dock = DockStyle.Fill;
-        var session = ActiveSession;
-        if (session is not null && _sessionContents.TryGetValue(session, out var sessionContent) && sessionContent.Pane is not null)
-        {
-            content.Show(sessionContent.Pane, DockAlignment.Right, 0.4);
-        }
-        else
-        {
-            content.Show(_dockPanel, DockState.Document);
-        }
-        content.FormClosed += (_, _) =>
-        {
-            _frameContent = null;
-            framePanel.Dispose();
-        };
-        _frameContent = content;
+        _frameForm.Controls.Add(framePanel);
+        _frameForm.FormClosed += (_, _) => _frameForm = null;
+        _frameForm.Show(this); // 非 modal、挂主窗体为 owner:主窗体最小化它跟着藏,关闭顺序也安全
     }
 
     private static Encoding GbkFallback()
