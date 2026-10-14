@@ -13,6 +13,8 @@ internal sealed class FramePanel : UserControl
     private readonly Func<byte[], bool> _sender;
     // 编码用委托实时取:会话面板改编码后,帧文本模式必须跟着变,快照会发错字节
     private readonly Func<Encoding> _encoding;
+    // 目标名实时取(与共享发送区同一目标):null = 还没点选任何串口窗口
+    private readonly Func<string?> _targetName;
     private readonly ListView _list;
     private readonly Button _loopButton;
     private readonly Label _statusLabel;
@@ -26,11 +28,12 @@ internal sealed class FramePanel : UserControl
     private CancellationTokenSource? _loopCts;
     private bool _suppressCheckSync;
 
-    public FramePanel(FrameStore store, Func<byte[], bool> sender, Func<Encoding>? encoding = null)
+    public FramePanel(FrameStore store, Func<byte[], bool> sender, Func<Encoding>? encoding = null, Func<string?>? targetName = null)
     {
         _store = store;
         _sender = sender;
         _encoding = encoding ?? (() => Encoding.GetEncoding("GBK"));
+        _targetName = targetName ?? (() => null);
 
         _newButton = new Button { Text = "新增", Width = 56 };
         _editButton = new Button { Text = "编辑", Width = 56 };
@@ -179,6 +182,17 @@ internal sealed class FramePanel : UserControl
 
     // ---------- 发送 ----------
 
+    /// <summary>发送前三查:没点选任何串口窗口就明确报"先选目标",别让用户误判成串口没打开。</summary>
+    private bool EnsureTarget()
+    {
+        if (_targetName() is not null)
+        {
+            return true;
+        }
+        SetStatus("先用鼠标点一下要发送的串口窗口(与发送区同一目标)", Color.DarkOrange);
+        return false;
+    }
+
     private void SetStatus(string text, Color color)
     {
         if (!_statusLabel.IsDisposed)
@@ -200,6 +214,10 @@ internal sealed class FramePanel : UserControl
     /// </summary>
     private async void SendExplicit()
     {
+        if (!EnsureTarget())
+        {
+            return;
+        }
         // 勾选优先:读列表勾选态(与 store.Enabled 经 ItemChecked 同步,两者一致)
         var checkedIdx = Enumerable.Range(0, _list.Items.Count).Where(i => _list.Items[i].Checked).ToList();
         IReadOnlyList<DataFrame> frames;
@@ -238,7 +256,7 @@ internal sealed class FramePanel : UserControl
                 }
             }
             SetStatus(ok
-                ? $"已发送 {frames.Count} 帧(按{source})"
+                ? $"已发送 {frames.Count} 帧(按{source}) → {_targetName()}"
                 : $"发送失败(按{source},串口未打开或被流控阻塞)", ok ? Color.DimGray : Color.Firebrick);
         }
         finally
@@ -250,12 +268,16 @@ internal sealed class FramePanel : UserControl
     /// <summary>连发:所有启用帧按顺序一遍(核心层自动跳过停用帧)。</summary>
     private async void SendEnabled()
     {
+        if (!EnsureTarget())
+        {
+            return;
+        }
         SetBusy(true);
         try
         {
             var runner = new FrameRunner(_sender);
             var ok = await runner.SendSelectedAsync(_store.Frames);
-            SetStatus(ok ? "连发完成" : "连发中断(发送失败或串口未打开)", ok ? Color.DimGray : Color.Firebrick);
+            SetStatus(ok ? $"连发完成 → {_targetName()}" : "连发中断(发送失败或串口未打开)", ok ? Color.DimGray : Color.Firebrick);
         }
         finally
         {
@@ -271,6 +293,10 @@ internal sealed class FramePanel : UserControl
             SetStatus("正在停止循环…", Color.DarkOrange);
             return;
         }
+        if (!EnsureTarget())
+        {
+            return;
+        }
         if (!_store.Frames.Any(f => f.Enabled))
         {
             SetStatus("没有启用帧,先勾选要循环发送的帧", Color.DarkOrange);
@@ -280,7 +306,7 @@ internal sealed class FramePanel : UserControl
         _loopCts = cts;
         _loopButton.Text = "停止";
         SetBusy(true);
-        SetStatus("循环发送中…(发往当前点选的串口;以启动时的帧列表为准,改动需停止后重启循环)", Color.ForestGreen);
+        SetStatus($"循环发送中 → {_targetName()}(以启动时的帧列表为准,改动需停止后重启循环)", Color.ForestGreen);
         var runner = new FrameRunner(_sender);
         // 快照必须在 UI 线程拍:FrameStore 是普通 List,线程池并发 ToArray 与 UI 改列表会竞态
         var snapshot = _store.Frames.ToArray();

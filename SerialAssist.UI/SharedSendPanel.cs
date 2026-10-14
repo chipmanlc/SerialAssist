@@ -98,7 +98,7 @@ internal sealed class SharedSendPanel : UserControl
         sendLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         sendLayout.Controls.Add(_sendBox, 0, 0);
         sendLayout.Controls.Add(side, 1, 0);
-        var sendGroup = new GroupBox { Text = "发送区(共用,先勾选目标串口)", Dock = DockStyle.Fill };
+        var sendGroup = new GroupBox { Text = "发送区(共用,点选目标串口)", Dock = DockStyle.Fill };
         sendGroup.Controls.Add(sendLayout);
 
         // ---- 预览行 ----
@@ -237,7 +237,7 @@ internal sealed class SharedSendPanel : UserControl
 
     /// <summary>
     /// 切换发送模式:同一份数据换显示形态(文本↔HEX 互转,行尾不掺入)。
-    /// 转换编码取"预览目标"(第一个勾选口,没有则第一个目标);HEX 转不动时弹回 HEX 模式,内容不丢。
+    /// 转换编码取当前目标口的编码(没有目标退回 GBK);HEX 转不动时弹回 HEX 模式,内容不丢。
     /// </summary>
     private void OnSendModeChanged(bool toText)
     {

@@ -536,12 +536,10 @@ internal sealed class SessionPanel : UserControl
 
     // ---------- 杂项 ----------
 
-    /// <summary>帧面板的发送通道:任意线程可调(循环发送在后台任务里跑),内部无 UI 依赖。</summary>
-
     /// <summary>共享发送区通道:UI 线程调用,失败原因见 LastSendError(状态栏提示由共享发送区统一报)。</summary>
     public bool TrySend(byte[] bytes) => _session.Send(bytes);
 
-    /// <summary>共享发送区勾选框显示名。</summary>
+    /// <summary>共享发送区/数据帧面板显示的目标名。</summary>
     public string TargetName => DisplayPortName ?? "串口(未命名)";
 
     /// <summary>当前接收区编码:数据帧文本模式按它转字节;共享发送区文本模式也按各口自己的编码转。</summary>

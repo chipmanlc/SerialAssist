@@ -237,7 +237,8 @@ internal sealed class MainForm : Form
         }
 
         var framePanel = new FramePanel(_frames, bytes => _sendTargetSession?.TrySend(bytes) ?? false,
-            () => _sendTargetSession?.TextEncoding ?? GbkFallback());
+            () => _sendTargetSession?.TextEncoding ?? GbkFallback(),
+            () => _sendTargetSession?.TargetName);
         var content = new DockContent
         {
             Text = "数据帧",
