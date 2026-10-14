@@ -151,7 +151,6 @@ internal sealed class MainForm : Form
         panel.Dock = DockStyle.Fill;
         content.Show(_dockPanel, DockState.Document);
         _sessionContents[panel] = content;
-        RefreshSendTargets();
         panel.FramesRequested += () => OpenFramePanel(panel);
         content.FormClosed += (_, _) =>
         {
@@ -177,6 +176,8 @@ internal sealed class MainForm : Form
         {
             panel.StartLogging(logPath);
         }
+        // 刷新目标勾选框必须放在 PreselectConfig 之后:否则新面板还没有端口名,勾选框会定格成"串口(未命名)"
+        RefreshSendTargets();
     }
 
     /// <summary>打开某会话的报文帧面板:停靠在该会话 pane 右侧;已开则激活,不重复开。</summary>
