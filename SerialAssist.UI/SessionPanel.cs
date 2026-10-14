@@ -30,6 +30,7 @@ internal sealed class SessionPanel : UserControl
     private bool _zoomRestorePending;
     private bool _wasMinimized;
     private bool _lastAtBottom = true;
+    private float _lastZoom = 1f;
     private bool _suppressLogDialog;
     private bool _suppressRadioConvert;
 
@@ -400,6 +401,17 @@ internal sealed class SessionPanel : UserControl
         else
         {
             atBottom = minimized || IsViewAtBottom();
+            // Ctrl+滚轮缩放会挪动视图锚点:放大后末行被挤出视野,IsViewAtBottom 误判成"离底回滚"。
+            // 缩放前本在跟随底部的话,缩放后强制回底部对齐,不报回滚
+            var zoomNow = _receiveBox.ZoomFactor;
+            var zoomed = Math.Abs(zoomNow - _lastZoom) > 0.001f;
+            _lastZoom = zoomNow;
+            if (zoomed && !minimized && _lastAtBottom && !atBottom)
+            {
+                _receiveBox.SelectionStart = _receiveBox.TextLength;
+                _receiveBox.ScrollToCaret();
+                atBottom = true;
+            }
         }
 
         if (!minimized)
