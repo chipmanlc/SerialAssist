@@ -370,9 +370,11 @@ internal sealed class SessionPanel : UserControl
         // 导致跟随中断;恢复后 ScrollToCaret 不会自动补,状态栏就永久卡在"回滚预览中"。
         // 处理:最小化期间沿用最小化前的跟随状态(_lastAtBottom);
         // 恢复后的第一拍,若最小化前本在底部,强制回底部对齐。
-        var form = FindForm();
+        // 最小化信号必须取顶层主窗体:停靠面板外层是 DockContent 子窗体,
+        // 主窗体最小化时子窗体自己的 WindowState 仍是 Normal,查 FindForm() 永远查不到。
+        var topForm = FindForm()?.TopLevelControl as Form;
         var minimized = _receiveBox.ClientSize.Height <= 0
-            || form is { WindowState: FormWindowState.Minimized };
+            || topForm is { WindowState: FormWindowState.Minimized };
         var justRestored = _wasMinimized && !minimized;
         _wasMinimized = minimized;
 
