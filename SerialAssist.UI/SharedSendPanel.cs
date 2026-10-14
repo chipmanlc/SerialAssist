@@ -22,6 +22,9 @@ internal sealed class SharedSendPanel : UserControl
     private readonly Label _statusLabel = null!;
     private bool _suppressRadioConvert;
 
+    /// <summary>用户请求打开数据帧面板(全软件共享一个,MainForm 据此停靠)。</summary>
+    public event Action? FramesRequested;
+
     public SharedSendPanel()
     {
         _statusLabel = new Label { Text = "就绪", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(10, 6, 4, 0) };
@@ -75,6 +78,9 @@ internal sealed class SharedSendPanel : UserControl
         clearSendButton.Click += (_, _) => _sendBox.Clear();
         var fileButton = new Button { Text = "发送文件", Width = 84, Height = 30 };
         fileButton.Click += (_, _) => OnSendFileClicked();
+        // 数据帧与发送同属"发什么"一族,入口放发送区;面板全软件一个,发往当前点选的串口
+        var frameButton = new Button { Text = "数据帧", Width = 84, Height = 30 };
+        frameButton.Click += (_, _) => FramesRequested?.Invoke();
 
         var modeRow = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0) };
         modeRow.Controls.Add(_textRadio);
@@ -87,6 +93,7 @@ internal sealed class SharedSendPanel : UserControl
         buttonRow.Controls.Add(sendButton);
         buttonRow.Controls.Add(clearSendButton);
         buttonRow.Controls.Add(fileButton);
+        buttonRow.Controls.Add(frameButton);
 
         var side = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Padding = new Padding(4, 2, 4, 2) };
         side.Controls.Add(modeRow);

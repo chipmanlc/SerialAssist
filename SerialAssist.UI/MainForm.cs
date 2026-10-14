@@ -42,15 +42,6 @@ internal sealed class MainForm : Form
         tileButton.Click += (_, _) => TileSessionWindows();
         toolbar.Items.Add(tileButton);
         toolbar.Items.Add(new ToolStripSeparator());
-        // 数据帧是全软件一个的共享面板(与发送区同一"点选目标"语义),入口放顶栏,不放各接收区
-        var frameButton = new ToolStripButton("数据帧")
-        {
-            ToolTipText = "打开数据帧面板(全软件共用,发往当前点选的串口)",
-            DisplayStyle = ToolStripItemDisplayStyle.Text,
-        };
-        frameButton.Click += (_, _) => OpenFramePanel();
-        toolbar.Items.Add(frameButton);
-        toolbar.Items.Add(new ToolStripSeparator());
         var helpButton = new ToolStripButton("操作说明")
         {
             ToolTipText = "软件操作说明书",
@@ -66,6 +57,7 @@ internal sealed class MainForm : Form
         _dockPanel = new DockPanel { Dock = DockStyle.Fill };
         _dockPanel.ActiveContentChanged += (_, _) => RefreshSendTarget();
         _sharedSend = new SharedSendPanel { Dock = DockStyle.Bottom, Height = 156 };
+        _sharedSend.FramesRequested += () => OpenFramePanel(); // 数据帧入口在发送区按钮行
         _emptyHint = new Label
         {
             Text = "点击左上角 + 新建串口面板",
