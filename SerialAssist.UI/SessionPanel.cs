@@ -48,9 +48,6 @@ internal sealed class SessionPanel : UserControl
     /// <summary>状态变化时上抛建议标题(如 "COM5 · 已打开"),供停靠面板标题用。</summary>
     public event Action<string>? TitleChanged;
 
-    /// <summary>用户请求打开数据帧面板(共享,MainForm 据此停靠 FramePanel)。</summary>
-    public event Action? FramesRequested;
-
     /// <summary>面板当前端口名(供帧面板标题等展示)。</summary>
     public string? DisplayPortName => _config?.PortName ?? _session.Config?.PortName;
 
@@ -109,9 +106,6 @@ internal sealed class SessionPanel : UserControl
         };
         var clearRecvButton = new Button { Text = "清除屏幕&&回滚", Width = 112, Height = 24 };
         clearRecvButton.Click += OnClearReceive;
-        // 数据帧按钮从原发送区迁来(发送区已共享化上移)
-        var frameButton = new Button { Text = "数据帧", Width = 76, Height = 24 };
-        frameButton.Click += (_, _) => FramesRequested?.Invoke();
         _logCheck = new CheckBox { Text = "记录日志", AutoSize = true };
         _logCheck.CheckedChanged += OnLogToggled;
         // 日志文件名常驻显示:状态栏是临时消息(会被悬停/滚动提示顶掉),路径在这里固定可见
@@ -126,7 +120,6 @@ internal sealed class SessionPanel : UserControl
         toolbar.Controls.Add(_encodingCombo);
         toolbar.Controls.Add(clearRecvButton);
         toolbar.Controls.Add(jumpLatestButton);
-        toolbar.Controls.Add(frameButton);
         toolbar.Controls.Add(_logCheck);
         toolbar.Controls.Add(_logPathLabel);
         toolbar.Controls.Add(_statusLabel);

@@ -42,6 +42,15 @@ internal sealed class MainForm : Form
         tileButton.Click += (_, _) => TileSessionWindows();
         toolbar.Items.Add(tileButton);
         toolbar.Items.Add(new ToolStripSeparator());
+        // 数据帧是全软件一个的共享面板(与发送区同一"点选目标"语义),入口放顶栏,不放各接收区
+        var frameButton = new ToolStripButton("数据帧")
+        {
+            ToolTipText = "打开数据帧面板(全软件共用,发往当前点选的串口)",
+            DisplayStyle = ToolStripItemDisplayStyle.Text,
+        };
+        frameButton.Click += (_, _) => OpenFramePanel();
+        toolbar.Items.Add(frameButton);
+        toolbar.Items.Add(new ToolStripSeparator());
         var helpButton = new ToolStripButton("操作说明")
         {
             ToolTipText = "软件操作说明书",
@@ -188,7 +197,6 @@ internal sealed class MainForm : Form
         content.Show(_dockPanel, DockState.Document);
         _sessionContents[panel] = content;
         _sessionOrder.Add(panel);
-        panel.FramesRequested += () => OpenFramePanel();
         content.FormClosed += (_, _) =>
         {
             _sessionContents.Remove(panel);
