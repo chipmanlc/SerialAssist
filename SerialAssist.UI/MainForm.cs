@@ -53,6 +53,7 @@ internal sealed class MainForm : Form
         toolbar.Items.Add(helpButton);
 
         _dockPanel = new DockPanel { Dock = DockStyle.Fill };
+        _dockPanel.ActiveContentChanged += (_, _) => RefreshSendTarget();
         _sharedSend = new SharedSendPanel { Dock = DockStyle.Bottom, Height = 156 };
         _emptyHint = new Label
         {
@@ -86,12 +87,30 @@ internal sealed class MainForm : Form
         }
     }
 
-    /// <summary>会话开/关后刷新共享发送区的目标勾选框(编码用委托实时取,不用反复刷新)。</summary>
-    private void RefreshSendTargets()
+    /// <summary>当前点选的会话:活动内容是串口面板则直接用;是某个会话的数据帧面板则归属其会话。</summary>
+    private SessionPanel? ActiveSession
     {
-        _sharedSend.SetTargets(_sessionContents.Keys
-            .Select(p => new SendTarget(p.TargetName, p.TrySend, () => p.TextEncoding))
-            .ToList());
+        get
+        {
+            if (_dockPanel.ActiveContent is not DockContent content || content.IsDisposed)
+            {
+                return null;
+            }
+            if (content.Controls.Count > 0 && content.Controls[0] is SessionPanel session)
+            {
+                return session;
+            }
+            return _framePanels.FirstOrDefault(kv => kv.Value == content).Key;
+        }
+    }
+
+    /// <summary>活动窗口变化后刷新共享发送区的目标串口(编码用委托实时取)。</summary>
+    private void RefreshSendTarget()
+    {
+        var session = ActiveSession;
+        _sharedSend.SetTarget(session is null
+            ? null
+            : new SendTarget(session.TargetName, session.TrySend, () => session.TextEncoding));
     }
 
     /// <summary>
@@ -165,7 +184,7 @@ internal sealed class MainForm : Form
         {
             _sessionContents.Remove(panel);
             _sessionOrder.Remove(panel);
-            RefreshSendTargets();
+            RefreshSendTarget();
             if (_framePanels.Remove(panel, out var frameContent))
             {
                 frameContent.Close(); // 会话关了,它的帧面板跟着关
@@ -186,8 +205,8 @@ internal sealed class MainForm : Form
         {
             panel.StartLogging(logPath);
         }
-        // 刷新目标勾选框必须放在 PreselectConfig 之后:否则新面板还没有端口名,勾选框会定格成"串口(未命名)"
-        RefreshSendTargets();
+        // 刷新目标串口必须放在 PreselectConfig 之后:否则新面板还没有端口名,会显示"未命名"
+        RefreshSendTarget();
         // 新开串口自动纳入网格(DPS 默认把新内容塞进已有 Document pane 当页签,必须重排才成窗)
         TileSessionWindows();
     }

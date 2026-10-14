@@ -8,13 +8,12 @@ public sealed record SendTarget(string Name, Func<byte[], bool> Send, Func<Encod
 
 /// <summary>
 /// 底部共享发送区(2026-10-14 用户新增):所有串口会话共用一个发送区。
-/// 目标串口用勾选框多选(全选/全不选),文本模式按每个目标自己的编码转字节,HEX 模式同一份字节广播。
+/// 目标串口 = 当前点选的串口窗口(单击选定),发送区顶部显示目标名;文本模式按该口自己的编码转字节。
 /// </summary>
 internal sealed class SharedSendPanel : UserControl
 {
-    private List<SendTarget> _targets = new();
-    private readonly List<CheckBox> _targetChecks = new();
-    private readonly FlowLayoutPanel _checkHost = null!;
+    private SendTarget? _target;
+    private readonly Label _targetLabel = null!;
     private readonly TextBox _sendBox = null!;
     private readonly RadioButton _textRadio = null!;
     private readonly RadioButton _hexRadio = null!;
@@ -32,17 +31,18 @@ internal sealed class SharedSendPanel : UserControl
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        // ---- 目标勾选行 ----
+        // ---- 目标行 ----
         var targetRow = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoSize = true, Margin = new Padding(0) };
-        _checkHost = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0) };
-        var selectAll = new Button { Text = "全选", Width = 52, Height = 24 };
-        var selectNone = new Button { Text = "全不选", Width = 64, Height = 24 };
-        selectAll.Click += (_, _) => SetAllTargets(true);
-        selectNone.Click += (_, _) => SetAllTargets(false);
+        _targetLabel = new Label
+        {
+            Text = "未选择(点一下串口窗口)",
+            AutoSize = true,
+            ForeColor = Color.Firebrick,
+            Margin = new Padding(2, 6, 6, 0),
+            Font = new Font(Font, FontStyle.Bold),
+        };
         targetRow.Controls.Add(new Label { Text = " 发送到:", AutoSize = true, Margin = new Padding(4, 6, 0, 0) });
-        targetRow.Controls.Add(_checkHost);
-        targetRow.Controls.Add(selectAll);
-        targetRow.Controls.Add(selectNone);
+        targetRow.Controls.Add(_targetLabel);
         targetRow.Controls.Add(_statusLabel);
 
         // ---- 发送输入区 ----
@@ -122,113 +122,65 @@ internal sealed class SharedSendPanel : UserControl
         UpdateSendPreview();
     }
 
-    /// <summary>MainForm 在会话开/关时调用,重建勾选框;按名字保留原勾选状态。</summary>
-    public void SetTargets(IReadOnlyList<SendTarget> targets)
+    /// <summary>MainForm 在活动窗口变化时调用,更新目标串口(点选哪个串口窗口就是哪个)。</summary>
+    public void SetTarget(SendTarget? target)
     {
-        _targets = targets.ToList();
-        var hadChecks = _targetChecks.Count > 0; // 之前有没有勾选框:区分"首次默认勾"与"用户主动全不选"
-        var checkedNames = _targetChecks.Where(c => c.Checked && c.Tag is string).Select(c => (string)c.Tag!).ToHashSet();
-        _checkHost.Controls.Clear();
-        _targetChecks.Clear();
-        foreach (var target in _targets)
-        {
-            var check = new CheckBox { Text = target.Name, AutoSize = true, Tag = target.Name, Margin = new Padding(2, 4, 6, 0) };
-            check.CheckedChanged += (_, _) => UpdateSendPreview();
-            _checkHost.Controls.Add(check);
-            _targetChecks.Add(check);
-        }
-        if (!hadChecks && _targetChecks.Count > 0)
-        {
-            // 首个串口建立时默认勾上,降低"没勾目标就点发送"的空手率
-            _targetChecks[0].Checked = true;
-        }
-        else
-        {
-            foreach (var check in _targetChecks)
-            {
-                check.Checked = checkedNames.Contains((string)check.Tag!);
-            }
-        }
+        _target = target;
+        _targetLabel.Text = target?.Name ?? "未选择(点一下串口窗口)";
+        _targetLabel.ForeColor = target is null ? Color.Firebrick : Color.FromArgb(0, 70, 130);
         UpdateSendPreview();
-    }
-
-    private List<SendTarget> CheckedTargets =>
-        _targets.Where((_, i) => i < _targetChecks.Count && _targetChecks[i].Checked).ToList();
-
-    private void SetAllTargets(bool checkd)
-    {
-        foreach (var check in _targetChecks)
-        {
-            check.Checked = checkd;
-        }
     }
 
     // ---------- 发送 ----------
 
     private void OnSendClicked()
     {
-        var targets = CheckedTargets;
-        if (targets.Count == 0)
+        if (_target is null)
         {
-            SetStatus("先勾选要发送的串口", Color.DarkOrange);
+            SetStatus("先用鼠标点一下要发送的串口窗口", Color.DarkOrange);
             return;
         }
         var newline = NewlineOptions.FromIndex(_lineEndingCombo.SelectedIndex);
-        var okNames = new List<string>();
-        var failNames = new List<string>();
-        var byteLen = 0;
         if (_hexRadio.Checked)
         {
-            // HEX 模式只解析一次,同一份字节广播到所有勾选目标(与编码无关)
+            // HEX 模式:解析一次,字节与编码无关
             var payload = SendFormatter.Format(SendMode.Hex, _sendBox.Text, Encoding.ASCII, newline);
             if (!payload.Ok)
             {
                 SetStatus($"发送失败:{payload.Error}", Color.Firebrick);
                 return;
             }
-            byteLen = payload.Bytes.Length;
-            foreach (var target in targets)
-            {
-                (target.Send(payload.Bytes) ? okNames : failNames).Add(target.Name);
-            }
-        }
-        else
-        {
-            // 文本模式按每个目标自己的编码转字节(各口设备编码可能不同)
-            foreach (var target in targets)
-            {
-                var payload = SendFormatter.Format(SendMode.Text, _sendBox.Text, target.Encoding(), newline);
-                if (!payload.Ok)
-                {
-                    failNames.Add($"{target.Name}:{payload.Error}");
-                    continue;
-                }
-                byteLen = payload.Bytes.Length;
-                (target.Send(payload.Bytes) ? okNames : failNames).Add(target.Name);
-            }
+            var sent = _target.Send(payload.Bytes);
+            SetStatus(sent
+                ? $"已发送 {payload.Bytes.Length} 字节 → {_target.Name}"
+                : $"发送失败:{_target.Name}(串口未打开或被流控阻塞)",
+                sent ? Color.DimGray : Color.Firebrick);
+            return;
         }
 
-        if (failNames.Count == 0)
+        // 文本模式按目标口自己的编码转字节
+        var payloadText = SendFormatter.Format(SendMode.Text, _sendBox.Text, _target.Encoding(), newline);
+        if (!payloadText.Ok)
         {
-            SetStatus($"已发送 {byteLen} 字节 → {string.Join("、", okNames)}", Color.DimGray);
+            SetStatus($"发送失败:{payloadText.Error}", Color.Firebrick);
+            return;
         }
-        else
-        {
-            SetStatus($"成功 {okNames.Count}/{targets.Count};失败:{string.Join("; ", failNames)}(串口未打开或被流控阻塞)",
-                okNames.Count > 0 ? Color.DarkOrange : Color.Firebrick);
-        }
+        var ok = _target.Send(payloadText.Bytes);
+        SetStatus(ok
+            ? $"已发送 {payloadText.Bytes.Length} 字节 → {_target.Name}"
+            : $"发送失败:{_target.Name}(串口未打开或被流控阻塞)",
+            ok ? Color.DimGray : Color.Firebrick);
     }
 
     /// <summary>
-    /// 发送文件到所有勾选目标:文本模式 = 文件原始字节 + 行尾下拉所选结尾(选"无"即纯原始字节);
-    /// HEX 模式 = 纯原始字节。文件字节不做编码转换,与原每口发送文件规则一致。
+    /// 发送文件到当前目标:文本模式 = 文件原始字节 + 行尾下拉所选结尾(选"无"即纯原始字节);
+    /// HEX 模式 = 纯原始字节。文件字节不做编码转换。
     /// </summary>
     private void OnSendFileClicked()
     {
-        var targets = CheckedTargets;
-        if (targets.Count == 0)
+        if (_target is null)
         {
-            SetStatus("先勾选要发送的串口", Color.DarkOrange);
+            SetStatus("先用鼠标点一下要发送的串口窗口", Color.DarkOrange);
             return;
         }
         using var dialog = new OpenFileDialog { Title = "选择要发送的文件" };
@@ -271,21 +223,15 @@ internal sealed class SharedSendPanel : UserControl
             }
         }
 
-        var okNames = new List<string>();
-        var failNames = new List<string>();
-        foreach (var target in targets)
-        {
-            (target.Send(fileBytes) ? okNames : failNames).Add(target.Name);
-        }
         var head = HexCodec.ToHexString(fileBytes[..Math.Min(16, fileBytes.Length)]);
         var ellipsis = fileBytes.Length > 16 ? " …" : string.Empty;
-        if (failNames.Count == 0)
+        if (_target.Send(fileBytes))
         {
-            SetStatus($"已发送 {Path.GetFileName(dialog.FileName)}({fileBytes.Length} 字节{endingNote}) → {string.Join("、", okNames)}:{head}{ellipsis}", Color.DimGray);
+            SetStatus($"已发送 {Path.GetFileName(dialog.FileName)}({fileBytes.Length} 字节{endingNote}) → {_target.Name}:{head}{ellipsis}", Color.DimGray);
         }
         else
         {
-            SetStatus($"文件发送成功 {okNames.Count}/{targets.Count};失败:{string.Join("、", failNames)}", okNames.Count > 0 ? Color.DarkOrange : Color.Firebrick);
+            SetStatus($"文件发送失败:{_target.Name}(串口未打开或被流控阻塞)", Color.Firebrick);
         }
     }
 
@@ -319,11 +265,10 @@ internal sealed class SharedSendPanel : UserControl
         }
     }
 
-    /// <summary>预览基准:第一个勾选目标的编码;没有勾选则用第一个目标;连目标都没有退回 GBK。</summary>
+    /// <summary>预览基准:当前目标口的编码;没有目标退回 GBK。</summary>
     private (SendTarget? Target, Encoding Enc) PreviewSource()
     {
-        var target = CheckedTargets.FirstOrDefault() ?? _targets.FirstOrDefault();
-        if (target is null)
+        if (_target is null)
         {
             Encoding gbk;
             try
@@ -336,7 +281,7 @@ internal sealed class SharedSendPanel : UserControl
             }
             return (null, gbk);
         }
-        return (target, target.Encoding());
+        return (_target, _target.Encoding());
     }
 
     /// <summary>发送框实时预览:文本模式显示将发送字节的 HEX(按预览目标编码),HEX 模式显示解码文本。</summary>
