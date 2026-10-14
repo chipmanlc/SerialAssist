@@ -42,6 +42,7 @@ internal sealed class SessionPanel : UserControl
     private CheckBox _timestampCheck = null!;
     private ComboBox _encodingCombo = null!;
     private CheckBox _logCheck = null!;
+    private Label _logPathLabel = null!;
     private Label _statusLabel = null!;
 
     /// <summary>状态变化时上抛建议标题(如 "COM5 · 已打开"),供停靠面板标题用。</summary>
@@ -116,6 +117,8 @@ internal sealed class SessionPanel : UserControl
         frameButton.Click += (_, _) => FramesRequested?.Invoke();
         _logCheck = new CheckBox { Text = "记录日志", AutoSize = true };
         _logCheck.CheckedChanged += OnLogToggled;
+        // 日志文件名常驻显示:状态栏是临时消息(会被悬停/滚动提示顶掉),路径在这里固定可见
+        _logPathLabel = new Label { Text = string.Empty, AutoSize = true, ForeColor = Color.ForestGreen };
         _statusLabel = new Label { Text = "未打开", AutoSize = true, ForeColor = Color.DimGray };
 
         toolbar.Controls.Add(_openCloseButton);
@@ -128,6 +131,7 @@ internal sealed class SessionPanel : UserControl
         toolbar.Controls.Add(jumpLatestButton);
         toolbar.Controls.Add(frameButton);
         toolbar.Controls.Add(_logCheck);
+        toolbar.Controls.Add(_logPathLabel);
         toolbar.Controls.Add(_statusLabel);
 
         _receiveBox = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BackColor = Color.White, Font = new Font("Consolas", 9.5f), DetectUrls = false };
@@ -474,6 +478,7 @@ internal sealed class SessionPanel : UserControl
         _suppressLogDialog = true;
         _logCheck.Checked = true;
         _suppressLogDialog = false;
+        _logPathLabel.Text = $"日志:{Path.GetFileName(path)}";
         UpdateStatus($"记录日志:{path}", Color.ForestGreen);
     }
 
@@ -503,6 +508,7 @@ internal sealed class SessionPanel : UserControl
         {
             _logger?.Dispose();
             _logger = null;
+            _logPathLabel.Text = string.Empty;
             UpdateStatus("日志已停止", Color.DimGray);
         }
     }
