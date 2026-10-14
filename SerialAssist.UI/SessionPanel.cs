@@ -124,7 +124,7 @@ internal sealed class SessionPanel : UserControl
         toolbar.Controls.Add(_logPathLabel);
         toolbar.Controls.Add(_statusLabel);
 
-        _receiveBox = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BackColor = Color.White, Font = new Font("Consolas", 9.5f), DetectUrls = false };
+        _receiveBox = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BackColor = Color.White, Font = new Font("Times New Roman", 9.5f), DetectUrls = false };
         _receiveBox.MouseEnter += (_, _) =>
         {
             _frozen = true;
