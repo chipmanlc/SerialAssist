@@ -188,6 +188,8 @@ internal sealed class MainForm : Form
         }
         // 刷新目标勾选框必须放在 PreselectConfig 之后:否则新面板还没有端口名,勾选框会定格成"串口(未命名)"
         RefreshSendTargets();
+        // 新开串口自动纳入网格(DPS 默认把新内容塞进已有 Document pane 当页签,必须重排才成窗)
+        TileSessionWindows();
     }
 
     /// <summary>打开某会话的报文帧面板:停靠在该会话 pane 右侧;已开则激活,不重复开。</summary>
