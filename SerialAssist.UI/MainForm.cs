@@ -29,6 +29,18 @@ internal sealed class MainForm : Form
         };
         addButton.Click += (_, _) => OpenSessionPanel();
         toolbar.Items.Add(addButton);
+        toolbar.Items.Add(new ToolStripSeparator());
+        var helpButton = new ToolStripButton("操作说明")
+        {
+            ToolTipText = "软件操作说明书",
+            DisplayStyle = ToolStripItemDisplayStyle.Text,
+        };
+        helpButton.Click += (_, _) =>
+        {
+            using var dialog = new HelpDialog();
+            dialog.ShowDialog(this); // 必须 this 为 owner,详见 OpenSessionPanel 内注释
+        };
+        toolbar.Items.Add(helpButton);
 
         _dockPanel = new DockPanel { Dock = DockStyle.Fill };
         _emptyHint = new Label
