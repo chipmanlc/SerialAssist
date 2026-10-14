@@ -144,6 +144,9 @@ internal sealed class SessionPanel : UserControl
         _receiveBox.MouseLeave += (_, _) =>
         {
             _frozen = false;
+            // 复位回滚提示标志:悬停期间"悬停预览中"顶掉了"回滚预览中",
+            // 但 _scrollBackHint 还挂着"已显示",不复位的话离开悬停后即使仍在回滚态也不再提示
+            _scrollBackHint = false;
             // 离开悬停只清掉"悬停预览中",不回显"已打开 COMx"(页签已有端口名,常态提示是噪音)
             UpdateStatus(string.Empty, Color.DimGray);
             RenderNewEntries();
