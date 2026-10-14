@@ -369,7 +369,23 @@ internal sealed class SessionPanel : UserControl
 
         if (_frozen)
         {
-            return; // 状态栏保持 MouseEnter 写入的"悬停预览中",不再刷缓冲条数
+            // 悬停中也检测滚动:悬停时用滚轮上翻历史应切"回滚预览中",滚回底部再切回"悬停预览中"。
+            // 渲染仍然冻结(返回),只是状态栏跟随滚动位置
+            var hoverAtBottom = IsViewAtBottom();
+            if (!hoverAtBottom)
+            {
+                if (!_scrollBackHint)
+                {
+                    _scrollBackHint = true;
+                    UpdateStatus("回滚预览中", Color.DarkOrange);
+                }
+            }
+            else if (_scrollBackHint)
+            {
+                _scrollBackHint = false;
+                UpdateStatus("悬停预览中", Color.DarkOrange);
+            }
+            return; // 渲染冻结,不刷缓冲条数
         }
 
         // 回滚看历史提示:视图离底即提示"回滚预览中",拖回底部自动清除。
