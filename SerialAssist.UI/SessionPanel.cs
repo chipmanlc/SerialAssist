@@ -139,7 +139,12 @@ internal sealed class SessionPanel : UserControl
         _receiveBox.MouseEnter += (_, _) =>
         {
             _frozen = true;
-            UpdateStatus("悬停预览中", Color.DarkOrange);
+            // 已在回滚态(视图离底)不切"悬停预览中":用户正翻历史,悬停提示是打扰。
+            // 仍置 _frozen 冻结渲染,让状态栏保持"回滚预览中"不被其他消息刷掉
+            if (IsViewAtBottom())
+            {
+                UpdateStatus("悬停预览中", Color.DarkOrange);
+            }
         };
         _receiveBox.MouseLeave += (_, _) =>
         {
