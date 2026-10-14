@@ -9,6 +9,7 @@ internal sealed class MainForm : Form
     private readonly DockPanel _dockPanel;
     private readonly SharedSendPanel _sharedSend;
     private readonly Dictionary<SessionPanel, DockContent> _sessionContents = new();
+    private readonly List<SessionPanel> _sessionOrder = new(); // 创建顺序,平铺排版按它来(Dictionary 顺序不保证)
     private readonly Dictionary<SessionPanel, DockContent> _framePanels = new();
     private int _panelCount;
 
@@ -94,22 +95,29 @@ internal sealed class MainForm : Form
     }
 
     /// <summary>
-    /// 垂直平铺:所有串口窗口左右等宽排开(Windows 传统"纵向平铺"语义)。
-    /// DPS 拆分递推:第 i 个窗 Show 到第 i-1 个窗的 pane 右侧、占其 i/(i+1),
-    /// 数学上恰好让最终每列等宽(2 窗各 1/2,3 窗各 1/3,以此类推)。
+    /// 垂直平铺(2026-10-14 用户拍板为两列网格):2 窗左右各半;3 窗上二下一;4 窗上二下二;
+    /// 5 窗上二下三;6 窗上二中二下二……以此类推(第 i 窗,0 基,落第 i%2 列)。
+    /// 拆分递推:先把第 2 窗摆右侧各占 1/2;之后第 i 窗摆到本列上一窗(i-2)底部,
+    /// 占该列 1/(已有行数+1)——恰好让同列各窗等高。
     /// </summary>
     private void TileSessionWindows()
     {
-        var contents = _sessionContents.Values
+        var contents = _sessionOrder
+            .Select(p => _sessionContents[p])
             .Where(c => !c.IsDisposed && c.DockState == DockState.Document)
             .ToList();
-        if (contents.Count < 2)
+        if (contents.Count == 0)
         {
             return;
         }
-        for (var i = 1; i < contents.Count; i++)
+        if (contents.Count >= 2)
         {
-            contents[i].Show(contents[i - 1].Pane!, DockAlignment.Right, i / (double)(i + 1));
+            contents[1].Show(contents[0].Pane!, DockAlignment.Right, 0.5);
+        }
+        for (var i = 2; i < contents.Count; i++)
+        {
+            var rowsInColumn = i / 2; // 该列在此之前已有的窗数
+            contents[i].Show(contents[i - 2].Pane!, DockAlignment.Bottom, 1.0 / (rowsInColumn + 1));
         }
     }
 
@@ -151,10 +159,12 @@ internal sealed class MainForm : Form
         panel.Dock = DockStyle.Fill;
         content.Show(_dockPanel, DockState.Document);
         _sessionContents[panel] = content;
+        _sessionOrder.Add(panel);
         panel.FramesRequested += () => OpenFramePanel(panel);
         content.FormClosed += (_, _) =>
         {
             _sessionContents.Remove(panel);
+            _sessionOrder.Remove(panel);
             RefreshSendTargets();
             if (_framePanels.Remove(panel, out var frameContent))
             {

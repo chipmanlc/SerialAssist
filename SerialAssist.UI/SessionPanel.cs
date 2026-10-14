@@ -84,7 +84,8 @@ internal sealed class SessionPanel : UserControl
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, FlowDirection = FlowDirection.LeftToRight };
+        // WrapContents=true:窗口窄(平铺/网格)时按钮自动折行,状态栏永远完整可见
+        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
         _openCloseButton = new Button { Text = "打开", Width = 64, Height = 24 };
         _openCloseButton.Click += OnOpenCloseClicked;
         _recvTextRadio = new RadioButton { Text = "文本", Checked = true, AutoSize = true };
