@@ -7,6 +7,7 @@ namespace SerialAssist.UI;
 internal sealed class MainForm : Form
 {
     private readonly DockPanel _dockPanel;
+    private readonly SharedSendPanel _sharedSend;
     private readonly Dictionary<SessionPanel, DockContent> _sessionContents = new();
     private readonly Dictionary<SessionPanel, DockContent> _framePanels = new();
     private int _panelCount;
@@ -30,6 +31,14 @@ internal sealed class MainForm : Form
         addButton.Click += (_, _) => OpenSessionPanel();
         toolbar.Items.Add(addButton);
         toolbar.Items.Add(new ToolStripSeparator());
+        var tileButton = new ToolStripButton("垂直平铺")
+        {
+            ToolTipText = "把所有串口窗口左右等宽排开,一屏全见",
+            DisplayStyle = ToolStripItemDisplayStyle.Text,
+        };
+        tileButton.Click += (_, _) => TileSessionWindows();
+        toolbar.Items.Add(tileButton);
+        toolbar.Items.Add(new ToolStripSeparator());
         var helpButton = new ToolStripButton("操作说明")
         {
             ToolTipText = "软件操作说明书",
@@ -43,6 +52,7 @@ internal sealed class MainForm : Form
         toolbar.Items.Add(helpButton);
 
         _dockPanel = new DockPanel { Dock = DockStyle.Fill };
+        _sharedSend = new SharedSendPanel { Dock = DockStyle.Bottom, Height = 156 };
         _emptyHint = new Label
         {
             Text = "点击左上角 + 新建串口面板",
@@ -53,6 +63,7 @@ internal sealed class MainForm : Form
             BackColor = SystemColors.Control,
         };
         Controls.Add(_dockPanel);
+        Controls.Add(_sharedSend);
         Controls.Add(toolbar);
         Controls.Add(_emptyHint);
         _emptyHint.BringToFront(); // 确保 hint 盖在 DockPanel 之上,首个面板打开后 Hide
@@ -71,6 +82,34 @@ internal sealed class MainForm : Form
         catch
         {
             return SystemIcons.Application;
+        }
+    }
+
+    /// <summary>会话开/关后刷新共享发送区的目标勾选框(编码用委托实时取,不用反复刷新)。</summary>
+    private void RefreshSendTargets()
+    {
+        _sharedSend.SetTargets(_sessionContents.Keys
+            .Select(p => new SendTarget(p.TargetName, p.TrySend, () => p.TextEncoding))
+            .ToList());
+    }
+
+    /// <summary>
+    /// 垂直平铺:所有串口窗口左右等宽排开(Windows 传统"纵向平铺"语义)。
+    /// DPS 拆分递推:第 i 个窗 Show 到第 i-1 个窗的 pane 右侧、占其 i/(i+1),
+    /// 数学上恰好让最终每列等宽(2 窗各 1/2,3 窗各 1/3,以此类推)。
+    /// </summary>
+    private void TileSessionWindows()
+    {
+        var contents = _sessionContents.Values
+            .Where(c => !c.IsDisposed && c.DockState == DockState.Document)
+            .ToList();
+        if (contents.Count < 2)
+        {
+            return;
+        }
+        for (var i = 1; i < contents.Count; i++)
+        {
+            contents[i].Show(contents[i - 1].Pane!, DockAlignment.Right, i / (double)(i + 1));
         }
     }
 
@@ -112,10 +151,12 @@ internal sealed class MainForm : Form
         panel.Dock = DockStyle.Fill;
         content.Show(_dockPanel, DockState.Document);
         _sessionContents[panel] = content;
+        RefreshSendTargets();
         panel.FramesRequested += () => OpenFramePanel(panel);
         content.FormClosed += (_, _) =>
         {
             _sessionContents.Remove(panel);
+            RefreshSendTargets();
             if (_framePanels.Remove(panel, out var frameContent))
             {
                 frameContent.Close(); // 会话关了,它的帧面板跟着关

@@ -6,7 +6,8 @@ using TextRenderer = SerialAssist.Core.TextRenderer;
 namespace SerialAssist.UI;
 
 /// <summary>
-/// 单串口面板(P3):参数栏 + 接收区(悬停冻结/文本HEX即切/时间戳) + 发送区(文本HEX) + 计数。
+/// 单串口面板:只含接收区(悬停冻结/文本HEX即切/时间戳/日志)。
+/// 发送区已上移为窗口底部共享发送区(SharedSendPanel),勾选目标串口发送。
 /// 线程边界:session.DataReceived 在线程池线程 → pipeline.Push(线程安全);
 /// UI 只在 30ms 定时器里读快照渲染,永不直接跨线程碰控件。
 /// </summary>
@@ -32,21 +33,15 @@ internal sealed class SessionPanel : UserControl
     private bool _lastAtBottom = true;
     private float _lastZoom = 1f;
     private bool _suppressLogDialog;
-    private bool _suppressRadioConvert;
 
     private PortConfig? _config;
     private Button _openCloseButton = null!;
     private RichTextBox _receiveBox = null!;
-    private TextBox _sendBox = null!;
     private RadioButton _recvTextRadio = null!;
     private RadioButton _recvHexRadio = null!;
-    private RadioButton _sendTextRadio = null!;
-    private RadioButton _sendHexRadio = null!;
     private CheckBox _timestampCheck = null!;
     private ComboBox _encodingCombo = null!;
     private CheckBox _logCheck = null!;
-    private ComboBox _lineEndingCombo = null!;
-    private Label _previewLabel = null!;
     private Label _statusLabel = null!;
 
     /// <summary>状态变化时上抛建议标题(如 "COM5 · 已打开"),供停靠面板标题用。</summary>
@@ -78,13 +73,8 @@ internal sealed class SessionPanel : UserControl
 
     private void BuildUi()
     {
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        Controls.Add(root);
-
-        root.Controls.Add(BuildReceiveArea());
-        root.Controls.Add(BuildSendArea());
+        // 发送区已移至窗口底部共享(SharedSendPanel),面板内只剩接收区
+        Controls.Add(BuildReceiveArea());
     }
 
     private Control BuildReceiveArea()
@@ -111,7 +101,6 @@ internal sealed class SessionPanel : UserControl
         {
             _textRenderer = new TextRenderer(GetEncoding());
             ReRenderAll();
-            UpdateSendPreview(); // 发送区与接收区共用编码,切换后预览同步重投影
         };
         var jumpLatestButton = new Button { Text = "跳到最新", Width = 76, Height = 24 };
         jumpLatestButton.Click += (_, _) =>
@@ -121,6 +110,9 @@ internal sealed class SessionPanel : UserControl
         };
         var clearRecvButton = new Button { Text = "清除屏幕&&回滚", Width = 112, Height = 24 };
         clearRecvButton.Click += OnClearReceive;
+        // 数据帧按钮从原发送区迁来(发送区已共享化上移)
+        var frameButton = new Button { Text = "数据帧", Width = 76, Height = 24 };
+        frameButton.Click += (_, _) => FramesRequested?.Invoke();
         _logCheck = new CheckBox { Text = "记录日志", AutoSize = true };
         _logCheck.CheckedChanged += OnLogToggled;
         _statusLabel = new Label { Text = "未打开", AutoSize = true, ForeColor = Color.DimGray };
@@ -133,6 +125,7 @@ internal sealed class SessionPanel : UserControl
         toolbar.Controls.Add(_encodingCombo);
         toolbar.Controls.Add(clearRecvButton);
         toolbar.Controls.Add(jumpLatestButton);
+        toolbar.Controls.Add(frameButton);
         toolbar.Controls.Add(_logCheck);
         toolbar.Controls.Add(_statusLabel);
 
@@ -161,85 +154,6 @@ internal sealed class SessionPanel : UserControl
         layout.Controls.Add(toolbar, 0, 0);
         layout.Controls.Add(_receiveBox, 0, 1);
         group.Controls.Add(layout);
-        return group;
-    }
-
-    private Control BuildSendArea()
-    {
-        var group = new GroupBox { Text = "发送区", Dock = DockStyle.Fill, Height = 110 };
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-        _sendBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, Font = new Font("Consolas", 9.5f) };
-        // 回车即发送(Shift+Enter 才换行),与 SSCOM 等工位工具习惯一致
-        _sendBox.KeyDown += (_, e) =>
-        {
-            if (e.KeyCode == Keys.Enter && !e.Shift)
-            {
-                e.SuppressKeyPress = true; // 不插入换行、不响系统提示音
-                OnSendClicked(this, e);
-            }
-        };
-        _sendTextRadio = new RadioButton { Text = "文本", Checked = true, AutoSize = true };
-        _sendHexRadio = new RadioButton { Text = "HEX", AutoSize = true };
-        // 切换发送模式 = 同一份数据换显示形态:点文本显示原文,点 HEX 显示 hex 字节串
-        // 只响应"被选中"的那次:取消选中的 CheckedChanged 也会触发,不挡会把刚转的内容转回去
-        _sendTextRadio.CheckedChanged += (_, _) => { UpdateLineEndingEnabled(); if (_sendTextRadio.Checked) OnSendModeChanged(toText: true); };
-        _sendHexRadio.CheckedChanged += (_, _) => { UpdateLineEndingEnabled(); if (_sendHexRadio.Checked) OnSendModeChanged(toText: false); };
-        // 行尾可选:默认 CR——多数 CLI 设备(如 admin\r 登入)只认回车,\n 会被当空输入
-        // 显示项与索引映射统一走 NewlineOptions,禁止 (NewlineMode)SelectedIndex 强转(顺序错位事故)
-        // 仅文本模式生效(HEX 协议帧字节必须精确),HEX 模式下拉置灰防误导
-        _lineEndingCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
-        _lineEndingCombo.Items.AddRange(NewlineOptions.DisplayNames);
-        _lineEndingCombo.SelectedIndex = 0;
-        var sendButton = new Button { Text = "发送", Width = 64, Height = 30 };
-        sendButton.Click += OnSendClicked;
-        var clearSendButton = new Button { Text = "清空", Width = 64, Height = 30 };
-        clearSendButton.Click += (_, _) => _sendBox.Clear(); // TextChanged 自动带动预览行刷新
-        var fileButton = new Button { Text = "发送文件", Width = 84, Height = 30 };
-        fileButton.Click += OnSendFileClicked;
-        var frameButton = new Button { Text = "数据帧", Width = 76, Height = 30 };
-        frameButton.Click += (_, _) => FramesRequested?.Invoke();
-
-        var modeRow = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0) };
-        modeRow.Controls.Add(_sendTextRadio);
-        modeRow.Controls.Add(_sendHexRadio);
-        modeRow.Controls.Add(new Label { Text = " 行尾:", AutoSize = true, Margin = new Padding(6, 6, 0, 0) });
-        modeRow.Controls.Add(_lineEndingCombo);
-
-        var side = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Padding = new Padding(4, 2, 4, 2) };
-        side.Controls.Add(modeRow);
-        // 按钮横排放一行:竖排第三个按钮曾被面板高度裁掉不可见(Height 110 只够两行)
-        var buttonRow = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0) };
-        buttonRow.Controls.Add(sendButton);
-        buttonRow.Controls.Add(clearSendButton);
-        buttonRow.Controls.Add(fileButton);
-        buttonRow.Controls.Add(frameButton);
-        side.Controls.Add(buttonRow);
-
-        // 双视图实时预览:打字/切模式/换行尾/换编码都即时刷新(文本模式显示HEX,HEX模式显示解码文本)
-        _previewLabel = new Label
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = false,
-            AutoEllipsis = true,
-            Height = 20,
-            TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-            ForeColor = Color.DimGray,
-            Text = "预览:",
-        };
-        _sendBox.TextChanged += (_, _) => UpdateSendPreview();
-        _lineEndingCombo.SelectedIndexChanged += (_, _) => UpdateSendPreview();
-
-        layout.Controls.Add(_sendBox, 0, 0);
-        layout.Controls.Add(side, 1, 0);
-        layout.Controls.Add(_previewLabel, 0, 1);
-        layout.SetColumnSpan(_previewLabel, 2);
-        group.Controls.Add(layout);
-        UpdateSendPreview();
         return group;
     }
 
@@ -610,142 +524,18 @@ internal sealed class SessionPanel : UserControl
         }
     }
 
-    private void OnSendClicked(object? sender, EventArgs e)
-    {
-        var mode = _sendHexRadio.Checked ? SendMode.Hex : SendMode.Text;
-        var newline = NewlineOptions.FromIndex(_lineEndingCombo.SelectedIndex);
-        var payload = SendFormatter.Format(mode, _sendBox.Text, GetEncoding(), newline);
-        if (!payload.Ok)
-        {
-            UpdateStatus($"发送失败:{payload.Error}", Color.Firebrick);
-            return;
-        }
-        if (_session.Send(payload.Bytes))
-        {
-            UpdateStatus($"已发送 {payload.Bytes.Length} 字节", Color.DimGray);
-        }
-        else
-        {
-            UpdateStatus($"发送失败:{_session.LastSendError ?? "串口未打开"}", Color.Firebrick);
-        }
-    }
-
-    /// <summary>
-    /// 切换发送模式:同一份数据换显示形态(文本↔HEX 互转发送框内容,行尾不掺入,发送时才附加)。
-    /// HEX 转不动时留在 HEX 模式并报错,内容绝不丢。
-    /// </summary>
-    private void OnSendModeChanged(bool toText)
-    {
-        UpdateSendPreview();
-        if (_suppressRadioConvert || string.IsNullOrWhiteSpace(_sendBox.Text))
-        {
-            return;
-        }
-        if (toText)
-        {
-            if (!HexCodec.TryParse(_sendBox.Text, out var bytes, out var error))
-            {
-                UpdateStatus($"转换失败:{error}(内容未变)", Color.Firebrick);
-                _suppressRadioConvert = true;
-                _sendHexRadio.Checked = true; // 弹回 HEX 模式
-                _suppressRadioConvert = false;
-                return;
-            }
-            _sendBox.Text = GetEncoding().GetString(bytes);
-        }
-        else
-        {
-            _sendBox.Text = HexCodec.ToHexString(GetEncoding().GetBytes(_sendBox.Text));
-        }
-    }
-
-    /// <summary>行尾只作用于文本模式:HEX 模式置灰,提示用户该参数不参与字节构造。</summary>
-    private void UpdateLineEndingEnabled() => _lineEndingCombo.Enabled = _sendTextRadio.Checked;
-
-    /// <summary>发送框双视图预览:文本模式显示将发送字节的 HEX,HEX 模式显示解码文本。</summary>
-    private void UpdateSendPreview()
-    {
-        if (_previewLabel is null)
-        {
-            return; // BuildUi 构建顺序中编码下拉先于预览行创建,防 null
-        }
-        const int MaxPreviewChars = 512; // 超长截断,防大文本拖慢 Label
-        var mode = _sendHexRadio.Checked ? SendMode.Hex : SendMode.Text;
-        var preview = SendPreview.Render(mode, _sendBox.Text, GetEncoding(), NewlineOptions.FromIndex(_lineEndingCombo.SelectedIndex));
-        if (preview.Length > MaxPreviewChars)
-        {
-            preview = preview[..MaxPreviewChars] + " …";
-        }
-        _previewLabel.Text = preview.Length == 0 ? "预览:" : $"预览: {preview}";
-    }
-
-    /// <summary>
-    /// 选定文件发送(2026-10-12 用户新增,2026-10-13 修订):文本模式 = 文件原始字节 + 行尾下拉所选结尾
-    /// (选"无"即纯原始字节);HEX 模式 = 纯原始字节(字节精确,行尾不掺入,与发送框规则一致)。
-    /// 状态栏显示开头字节的 HEX 预览供核对。
-    /// </summary>
-    private void OnSendFileClicked(object? sender, EventArgs e)
-    {
-        using var dialog = new OpenFileDialog { Title = "选择要发送的文件" };
-        if (dialog.ShowDialog(this) != DialogResult.OK)
-        {
-            return;
-        }
-
-        byte[] bytes;
-        try
-        {
-            bytes = File.ReadAllBytes(dialog.FileName);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-        {
-            UpdateStatus($"读取文件失败:{ex.Message}", Color.Firebrick);
-            return;
-        }
-        if (bytes.Length == 0)
-        {
-            UpdateStatus("文件为空,未发送", Color.DarkOrange);
-            return;
-        }
-
-        // 文本模式下按行尾下拉追加结尾;HEX 模式直发原始字节
-        var fileBytes = bytes;
-        var endingNote = string.Empty;
-        if (_sendTextRadio.Checked)
-        {
-            var ending = NewlineOptions.FromIndex(_lineEndingCombo.SelectedIndex) switch
-            {
-                NewlineMode.CR => new byte[] { 0x0D },
-                NewlineMode.LF => new byte[] { 0x0A },
-                NewlineMode.CRLF => new byte[] { 0x0D, 0x0A },
-                _ => Array.Empty<byte>(),
-            };
-            if (ending.Length > 0)
-            {
-                fileBytes = [.. bytes, .. ending];
-                endingNote = ",含行尾";
-            }
-        }
-
-        if (_session.Send(fileBytes))
-        {
-            // HEX 预览头 16 字节,核对"发出去的到底是什么"
-            var head = HexCodec.ToHexString(fileBytes[..Math.Min(16, fileBytes.Length)]);
-            var ellipsis = fileBytes.Length > 16 ? " …" : string.Empty;
-            UpdateStatus($"已发送 {Path.GetFileName(dialog.FileName)}({fileBytes.Length} 字节{endingNote}):{head}{ellipsis}", Color.DimGray);
-        }
-        else
-        {
-            UpdateStatus($"文件发送失败:{_session.LastSendError ?? "串口未打开"}", Color.Firebrick);
-        }
-    }
-
     // ---------- 杂项 ----------
 
     /// <summary>帧面板的发送通道:任意线程可调(循环发送在后台任务里跑),内部无 UI 依赖。</summary>
     public bool SendFrameBytes(byte[] bytes) => _session.Send(bytes);
 
-    /// <summary>当前接收/发送区编码:数据帧文本模式按它转字节,与手动发送保持一致。</summary>
+    /// <summary>共享发送区通道:UI 线程调用,失败原因见 LastSendError(状态栏提示由共享发送区统一报)。</summary>
+    public bool TrySend(byte[] bytes) => _session.Send(bytes);
+
+    /// <summary>共享发送区勾选框显示名。</summary>
+    public string TargetName => DisplayPortName ?? "串口(未命名)";
+
+    /// <summary>当前接收区编码:数据帧文本模式按它转字节;共享发送区文本模式也按各口自己的编码转。</summary>
     public Encoding TextEncoding => GetEncoding();
 
     private void UpdateStatus(string text, Color color)
