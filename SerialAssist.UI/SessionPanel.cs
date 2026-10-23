@@ -6,7 +6,7 @@ using TextRenderer = SerialAssist.Core.TextRenderer;
 namespace SerialAssist.UI;
 
 /// <summary>
-/// 单串口面板:只含接收区(悬停冻结/文本HEX即切/时间戳/日志)。
+/// 单串口面板:只含接收区(文本HEX即切/时间戳/日志)。
 /// 发送区已上移为窗口底部共享发送区(SharedSendPanel),勾选目标串口发送。
 /// 线程边界:session.DataReceived 在线程池线程 → pipeline.Push(线程安全);
 /// UI 只在 30ms 定时器里读快照渲染,永不直接跨线程碰控件。
@@ -25,7 +25,6 @@ internal sealed class SessionPanel : UserControl
     private long _loggedSeq;
     private const int LogBudgetPerTick = 4_000; // 单轮最多写日志行数,防洪流时写盘拖死 UI 线程(欠账下轮追)
     private SessionLogger? _logger;
-    private bool _frozen;
     private bool _scrollBackHint;
     private float _savedZoom = 1f;
     private bool _zoomRestorePending;
@@ -108,7 +107,7 @@ internal sealed class SessionPanel : UserControl
         clearRecvButton.Click += OnClearReceive;
         _logCheck = new CheckBox { Text = "记录日志", AutoSize = true };
         _logCheck.CheckedChanged += OnLogToggled;
-        // 日志文件名常驻显示:状态栏是临时消息(会被悬停/滚动提示顶掉),路径在这里固定可见
+        // 日志文件名常驻显示:状态栏是临时消息(会被滚动提示顶掉),路径在这里固定可见
         _logPathLabel = new Label { Text = string.Empty, AutoSize = true, ForeColor = Color.ForestGreen };
         _statusLabel = new Label { Text = "未打开", AutoSize = true, ForeColor = Color.DimGray };
 
@@ -125,26 +124,7 @@ internal sealed class SessionPanel : UserControl
         toolbar.Controls.Add(_statusLabel);
 
         _receiveBox = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BackColor = Color.White, Font = new Font("Times New Roman", 9.5f), DetectUrls = false };
-        _receiveBox.MouseEnter += (_, _) =>
-        {
-            _frozen = true;
-            // 已在回滚态(视图离底)不切"悬停预览中":用户正翻历史,悬停提示是打扰。
-            // 仍置 _frozen 冻结渲染,让状态栏保持"回滚预览中"不被其他消息刷掉
-            if (IsViewAtBottom())
-            {
-                UpdateStatus("悬停预览中", Color.DarkOrange);
-            }
-        };
-        _receiveBox.MouseLeave += (_, _) =>
-        {
-            _frozen = false;
-            // 复位回滚提示标志:悬停期间"悬停预览中"顶掉了"回滚预览中",
-            // 但 _scrollBackHint 还挂着"已显示",不复位的话离开悬停后即使仍在回滚态也不再提示
-            _scrollBackHint = false;
-            // 离开悬停只清掉"悬停预览中",不回显"已打开 COMx"(页签已有端口名,常态提示是噪音)
-            UpdateStatus(string.Empty, Color.DimGray);
-            RenderNewEntries();
-        };
+        // 悬停冻结已按用户要求取消(2026-10-23):鼠标停上面照样滚,只有滚轮/拖滚动条翻历史才停
 
         layout.Controls.Add(toolbar, 0, 0);
         layout.Controls.Add(_receiveBox, 0, 1);
@@ -276,29 +256,8 @@ internal sealed class SessionPanel : UserControl
             }
         }
 
-        if (_frozen)
-        {
-            // 悬停中也检测滚动:悬停时用滚轮上翻历史应切"回滚预览中",滚回底部再切回"悬停预览中"。
-            // 渲染仍然冻结(返回),只是状态栏跟随滚动位置
-            var hoverAtBottom = IsViewAtBottom();
-            if (!hoverAtBottom)
-            {
-                if (!_scrollBackHint)
-                {
-                    _scrollBackHint = true;
-                    UpdateStatus("回滚预览中", Color.DarkOrange);
-                }
-            }
-            else if (_scrollBackHint)
-            {
-                _scrollBackHint = false;
-                UpdateStatus("悬停预览中", Color.DarkOrange);
-            }
-            return; // 渲染冻结,不刷缓冲条数
-        }
-
         // 回滚看历史提示:视图离底即提示"回滚预览中",拖回底部自动清除。
-        // 每 tick 都检测(无新数据也要响应用户拖滚动条);悬停冻结时由"悬停预览中"接管。
+        // 每 tick 都检测(无新数据也要响应用户拖滚动条)。
         //
         // 最小化坑:窗口最小化时客户区塌为 0,IsViewAtBottom 必误判"离底",
         // 导致跟随中断;恢复后 ScrollToCaret 不会自动补,状态栏就永久卡在"回滚预览中"。
@@ -414,10 +373,6 @@ internal sealed class SessionPanel : UserControl
 
     private void ReRenderAll()
     {
-        if (_frozen)
-        {
-            return;
-        }
         ClearReceiveBoxPreserveZoom();
         _renderedSeq = _pipeline.FirstSequence; // 从管线最旧开始重投影(单轮预算限量,多轮追完)
         RenderNewEntries();
