@@ -1,19 +1,19 @@
-#define MyAppName "LuckyC SerialAssist"
+#define MyAppName "LuckC"
 #define MyAppVersion "1.0.0"
-#define MyAppPublisher "LuckyC"
-#define MyAppExeName "LuckyC SerialAssist.exe"
+#define MyAppPublisher "LuckC"
+#define MyAppExeName "LuckC.exe"
 
 [Setup]
-AppId={{4D9F1A2B-7C3E-4B86-9A50-2E6D8F1C7B34}
+AppId={{5E2A8B4C-9D3F-4A71-B6C0-1F7D3E9A2C58}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={localappdata}\Programs\LuckyC SerialAssist
+DefaultDirName={localappdata}\Programs\LuckC
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\dist
-OutputBaseFilename=LuckyC-SerialAssist-Setup
+OutputBaseFilename=LuckC-Setup
 SetupIconFile=..\SerialAssist.UI\app.ico
 Compression=lzma2
 SolidCompression=yes
@@ -33,7 +33,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务:"
 
 [Files]
-Source: "..\SerialAssist.UI\bin\Release\net10.0-windows\win-x64\publish\LuckyC SerialAssist.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SerialAssist.UI\bin\Release\net10.0-windows\win-x64\publish\LuckC.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"

@@ -14,11 +14,11 @@ if not exist "%ISCC%" (
   echo Inno Setup 6 not found. Install it first: https://jrsoftware.org/isdl.php
   goto fail
 )
-"%ISCC%" "installer\LuckyC SerialAssist.iss"
+"%ISCC%" "installer\LuckC.iss"
 if errorlevel 1 goto fail
 
 echo.
-echo OK: dist\LuckyC-SerialAssist-Setup.exe
+echo OK: dist\LuckC-Setup.exe
 explorer dist
 pause
 exit /b 0

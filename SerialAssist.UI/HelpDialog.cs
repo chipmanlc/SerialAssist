@@ -32,7 +32,7 @@ internal sealed class HelpDialog : Form
         });
         header.Controls.Add(new Label
         {
-            Text = "USER MANUAL · LUCKY C SERIALASSIST",
+            Text = "USER MANUAL · LUCKC",
             Dock = DockStyle.Bottom,
             Height = 20,
             Font = UiTheme.UiFont(7.5f, FontStyle.Bold),
@@ -91,7 +91,7 @@ internal sealed class HelpDialog : Form
     }
     private static void AppendManual(RichTextBox box)
     {
-        Heading("LuckyC SerialAssist 使用说明");
+        Heading("LuckC 使用说明");
         Blank();
 
         Heading("一、开始使用");

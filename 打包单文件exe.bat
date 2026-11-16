@@ -11,6 +11,6 @@ if errorlevel 1 (
 )
 echo.
 echo [OK] Single-file exe:
-echo   SerialAssist.UI\bin\Release\net10.0-windows\win-x64\publish\LuckyC SerialAssist.exe
+echo   SerialAssist.UI\bin\Release\net10.0-windows\win-x64\publish\LuckC.exe
 explorer "%~dp0SerialAssist.UI\bin\Release\net10.0-windows\win-x64\publish"
 pause

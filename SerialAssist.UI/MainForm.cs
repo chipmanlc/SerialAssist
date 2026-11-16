@@ -18,7 +18,7 @@ internal sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "LuckyC SerialAssist";
+        Text = "LuckC";
         Icon = TryLoadAppIcon();
         Size = new Size(1240, 840);
         MinimumSize = new Size(900, 620);
@@ -118,29 +118,20 @@ internal sealed class MainForm : Form
         var titles = new TableLayoutPanel
         {
             ColumnCount = 1,
-            RowCount = 2,
+            RowCount = 1,
             AutoSize = true,
             BackColor = Color.Transparent,
             Margin = new Padding(0),
         };
         titles.Controls.Add(new Label
         {
-            Text = "LuckyC SerialAssist",
+            Text = "LuckC",
+            Margin = new Padding(0, 7, 0, 0),
             AutoSize = true,
             Font = UiTheme.UiFont(13f, FontStyle.Bold),
             ForeColor = UiTheme.Text,
             BackColor = Color.Transparent,
-            Margin = new Padding(0),
         }, 0, 0);
-        titles.Controls.Add(new Label
-        {
-            Text = "SERIAL ASSISTANT",
-            AutoSize = true,
-            Font = UiTheme.UiFont(7.5f, FontStyle.Bold),
-            ForeColor = UiTheme.Accent,
-            BackColor = Color.Transparent,
-            Margin = new Padding(1, 2, 0, 0),
-        }, 0, 1);
         brand.Controls.Add(logo);
         brand.Controls.Add(titles);
 
