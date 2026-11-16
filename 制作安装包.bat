@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul
 cd /d "%~dp0"
 
@@ -14,7 +14,7 @@ if not exist "%ISCC%" (
   echo Inno Setup 6 not found. Install it first: https://jrsoftware.org/isdl.php
   goto fail
 )
-"%ISCC%" "installer\LuckyC Serial Assist.iss"
+"%ISCC%" "installer\LuckyC SerialAssist.iss"
 if errorlevel 1 goto fail
 
 echo.

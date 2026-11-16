@@ -1,4 +1,4 @@
-# LuckyC Serial Assist
+# LuckyC SerialAssist
 
 A Windows serial port assistant for real-time receive/send, hex/ASCII switching, timestamps, logging, persistent command frames, and a shared send console.
 

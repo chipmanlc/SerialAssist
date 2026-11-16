@@ -18,7 +18,7 @@ internal sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "LuckyC Serial Assist";
+        Text = "LuckyC SerialAssist";
         Icon = TryLoadAppIcon();
         Size = new Size(1240, 840);
         MinimumSize = new Size(900, 620);
@@ -125,7 +125,7 @@ internal sealed class MainForm : Form
         };
         titles.Controls.Add(new Label
         {
-            Text = "LuckyC Serial Assist",
+            Text = "LuckyC SerialAssist",
             AutoSize = true,
             Font = UiTheme.UiFont(13f, FontStyle.Bold),
             ForeColor = UiTheme.Text,

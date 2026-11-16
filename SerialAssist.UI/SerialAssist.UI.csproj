@@ -19,9 +19,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <AssemblyName>LuckyC Serial Assist</AssemblyName>
-    <ApplicationTitle>LuckyC Serial Assist</ApplicationTitle>
-    <Product>LuckyC Serial Assist</Product>
+    <AssemblyName>LuckyC SerialAssist</AssemblyName>
+    <ApplicationTitle>LuckyC SerialAssist</ApplicationTitle>
+    <Product>LuckyC SerialAssist</Product>
   </PropertyGroup>
 
 </Project>
