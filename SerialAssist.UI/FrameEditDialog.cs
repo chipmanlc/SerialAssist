@@ -47,6 +47,7 @@ internal sealed class FrameEditDialog : Form
     private readonly ThemedSelect _checksumCombo = new() { Dock = DockStyle.Fill };
     private readonly NumericUpDown _delayBox = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 60_000, Value = 0 };
     private readonly Label _errorLabel = new() { Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = UiTheme.TextMuted, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly FlowLayoutPanel _escapeRow = new() { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, BackColor = Color.Transparent, Margin = new Padding(0) };
     private readonly ThemedButton _okButton = new() { Text = "确定", Kind = ThemedButtonKind.Primary, DialogResult = DialogResult.OK, Width = 88, Height = 36 };
     private readonly Encoding _encoding;
 
@@ -119,13 +120,13 @@ internal sealed class FrameEditDialog : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 6,
+            RowCount = 7,
             BackColor = Color.Transparent,
             Margin = new Padding(0),
         };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 6; i++)
         {
             grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         }
@@ -165,9 +166,27 @@ internal sealed class FrameEditDialog : Form
         _hexRadio.CheckedChanged += (_, _) => { if (_hexRadio.Checked) OnInputModeChanged(); };
         AddRow(1, "输入模式", modeRow);
         AddRow(2, "内容", _payloadBox);
-        AddRow(3, "校验", _checksumCombo);
-        AddRow(4, "帧后延时", _delayBox);
-        grid.Controls.Add(_errorLabel, 1, 5);
+        AddEscapeButton("插入 \\r", "\\r");
+        AddEscapeButton("插入 \\n", "\\n");
+        AddEscapeButton("插入 \\r\\n", "\\r\\n");
+        AddRow(3, "快捷插入", _escapeRow);
+        AddRow(4, "校验", _checksumCombo);
+        AddRow(5, "帧后延时", _delayBox);
+        grid.Controls.Add(_errorLabel, 1, 6);
+
+        void AddEscapeButton(string text, string value)
+        {
+            var button = new ThemedButton
+            {
+                Text = text,
+                Kind = ThemedButtonKind.Ghost,
+                Width = text.Length > 5 ? 92 : 76,
+                Height = 24,
+                Margin = new Padding(0, 0, 6, 0),
+            };
+            button.Click += (_, _) => InsertPayloadEscape(value);
+            _escapeRow.Controls.Add(button);
+        }
 
         card.Controls.Add(grid);
         bodyHost.Controls.Add(card);
@@ -220,8 +239,18 @@ internal sealed class FrameEditDialog : Form
     /// <summary>切换输入模式时内容留在原地(原样是另一种模式的合法输入),立即重校验。</summary>
     private void OnInputModeChanged()
     {
+        _escapeRow.Enabled = _textRadio.Checked;
         UpdateHint();
         ValidatePayload();
+    }
+
+    private void InsertPayloadEscape(string value)
+    {
+        var start = _payloadBox.SelectionStart;
+        _payloadBox.Text = _payloadBox.Text.Insert(start, value);
+        _payloadBox.SelectionStart = start + value.Length;
+        _payloadBox.SelectionLength = 0;
+        _payloadBox.Focus();
     }
 
     /// <summary>当前输入模式下解析 payload。</summary>
@@ -248,8 +277,11 @@ internal sealed class FrameEditDialog : Form
         }
         else if (ok)
         {
-            _errorLabel.Text = $"共 {bytes.Length} 字节:{TruncateHex(bytes)}";
-            _errorLabel.ForeColor = UiTheme.Success;
+            var slashWarning = SlashEscapeWarning(_payloadBox.Text);
+            _errorLabel.Text = slashWarning is null
+                ? $"共 {bytes.Length} 字节:{TruncateHex(bytes)}"
+                : $"共 {bytes.Length} 字节:{TruncateHex(bytes)}  |  {slashWarning}";
+            _errorLabel.ForeColor = slashWarning is null ? UiTheme.Success : UiTheme.Warning;
             _okButton.Enabled = true;
         }
         else
@@ -266,6 +298,18 @@ internal sealed class FrameEditDialog : Form
             ? "输入 HEX 字节,可用空格/逗号分隔"
             : "输入文本,支持转义:\\r \\n \\t \\0 \\\\ \\xHH";
         _errorLabel.ForeColor = UiTheme.TextMuted;
+    }
+
+    private static string? SlashEscapeWarning(string text)
+    {
+        foreach (var escape in new[] { "/r", "/n", "/t", "/0", "/x" })
+        {
+            if (text.Contains(escape, StringComparison.Ordinal))
+            {
+                return "检测到 / 转义；请用反斜杠 \\，例如 \\r";
+            }
+        }
+        return null;
     }
 
     private static string TruncateHex(byte[] bytes)
