@@ -57,6 +57,26 @@ public sealed class FramePersistenceTests
     }
 
     [Test]
+    public void SaveThenLoad_PreservesTextEscapesAsBytes()
+    {
+        var frame = new DataFrame("带转义", [0x41, 0x54, 0x0D, 0x0A])
+        {
+            SourceInput = "AT\\r\\n",
+            InputMode = FrameInputMode.Text,
+        };
+
+        Assert.That(FramePersistence.Save(_path, new[] { frame }), Is.True);
+        var loaded = FramePersistence.Load(_path).Single();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(loaded.SourceInput, Is.EqualTo("AT\\r\\n"));
+            Assert.That(loaded.InputMode, Is.EqualTo(FrameInputMode.Text));
+            Assert.That(loaded.BuildBytes(), Is.EqualTo(new byte[] { 0x41, 0x54, 0x0D, 0x0A }));
+        });
+    }
+
+    [Test]
     public void Load_MissingFile_ReturnsEmpty()
     {
         Assert.That(FramePersistence.Load(_path), Is.Empty);

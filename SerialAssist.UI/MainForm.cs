@@ -327,6 +327,11 @@ internal sealed class MainForm : Form
         {
             return;
         }
+        SetSendTarget(session);
+    }
+
+    private void SetSendTarget(SessionPanel session)
+    {
         _sendTargetSession = session;
         _sharedSend.SetTarget(new SendTarget(session.TargetName, session.TrySend, () => session.TextEncoding));
     }
@@ -395,9 +400,9 @@ internal sealed class MainForm : Form
         panel.TitleChanged += title => content.Text = title;
         content.Controls.Add(panel);
         panel.Dock = DockStyle.Fill;
-        content.Show(_dockPanel, DockState.Document);
         _sessionContents[panel] = content;
         _sessionOrder.Add(panel);
+        content.Show(_dockPanel, DockState.Document);
         content.FormClosed += (_, _) =>
         {
             _sessionContents.Remove(panel);
@@ -428,8 +433,8 @@ internal sealed class MainForm : Form
         {
             panel.StartLogging(logPath);
         }
-        // 刷新目标串口必须放在 PreselectConfig 之后:否则新面板还没有端口名,会显示"未命名"
-        RefreshSendTarget();
+        // 新面板创建后直接设为发送目标:不依赖 ActiveContentChanged 的时序
+        SetSendTarget(panel);
         // 新开串口自动纳入网格(DPS 默认把新内容塞进已有 Document pane 当页签,必须重排才成窗)
         TileSessionWindows();
     }
