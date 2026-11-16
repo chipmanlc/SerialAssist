@@ -19,62 +19,260 @@ internal sealed class MainForm : Form
     {
         Text = "CHEN串口助手";
         Icon = TryLoadAppIcon();
-        Size = new Size(1200, 820);
-        StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(800, 560);
+        Size = new Size(1240, 840);
+        MinimumSize = new Size(900, 620);
+        // 工具窗口优先放副屏,主屏留给用户工作;没有副屏时仍在主屏居中。
+        StartPosition = FormStartPosition.Manual;
+        var targetScreen = Screen.AllScreens.FirstOrDefault(s => !s.Primary) ?? Screen.PrimaryScreen!;
+        var work = targetScreen.WorkingArea;
+        Location = new Point(
+            work.Left + Math.Max(0, (work.Width - Width) / 2),
+            work.Top + Math.Max(0, (work.Height - Height) / 2));
+        BackColor = UiTheme.Bg;
+        ForeColor = UiTheme.Text;
+        Font = UiTheme.UiFont();
+        DoubleBuffered = true;
 
-        // 工具栏:加号新建串口面板(参数与日志在弹出的对话框里一次配齐);退出走窗口关闭钮
-        var toolbar = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, ImageScalingSize = new Size(20, 20) };
-        var addButton = new ToolStripButton("+")
+        var header = BuildHeader();
+
+        var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Bg, Padding = new Padding(14, 12, 14, 0) };
+        _dockPanel = new DockPanel { Dock = DockStyle.Fill, BackColor = UiTheme.Bg };
+        _dockPanel.ActiveContentChanged += (_, _) => RefreshSendTarget();
+        _emptyHint = BuildEmptyState();
+        body.Controls.Add(_dockPanel);
+        body.Controls.Add(_emptyHint);
+        _emptyHint.BringToFront(); // 空态只盖住工作区,不遮顶部和发送区
+
+        _sharedSend = new SharedSendPanel { Dock = DockStyle.Fill };
+        _sharedSend.FramesRequested += () => OpenFramePanel(); // 数据帧入口在发送区按钮行
+        var sendHost = new Panel { Dock = DockStyle.Bottom, Height = 244, BackColor = UiTheme.Bg, Padding = new Padding(14, 6, 14, 12) };
+        sendHost.Controls.Add(_sharedSend);
+
+        Controls.Add(body);
+        Controls.Add(sendHost);
+        Controls.Add(header);
+
+        UiTheme.StyleForm(this);
+    }
+
+    private Control BuildHeader()
+    {
+        var header = new Panel
         {
-            ToolTipText = "新建串口面板",
-            Font = new Font("Segoe UI", 13f, FontStyle.Bold),
-            DisplayStyle = ToolStripItemDisplayStyle.Text,
+            Dock = DockStyle.Top,
+            Height = 74,
+            BackColor = UiTheme.BgElevated,
+            Padding = new Padding(20, 0, 16, 0),
+        };
+        header.Paint += (_, e) =>
+        {
+            using var pen = new Pen(UiTheme.BorderSoft);
+            e.Graphics.DrawLine(pen, 0, header.Height - 1, header.Width, header.Height - 1);
+        };
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        var brand = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Padding = new Padding(0, 16, 0, 0),
+            Margin = new Padding(0),
+        };
+        var logo = new PictureBox
+        {
+            Size = new Size(40, 40),
+            SizeMode = PictureBoxSizeMode.Zoom,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 12, 0),
+        };
+        try
+        {
+            logo.Image = Icon?.ToBitmap();
+        }
+        catch
+        {
+            logo.Visible = false;
+        }
+        var titles = new TableLayoutPanel
+        {
+            ColumnCount = 1,
+            RowCount = 2,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        titles.Controls.Add(new Label
+        {
+            Text = "CHEN 串口助手",
+            AutoSize = true,
+            Font = UiTheme.UiFont(13f, FontStyle.Bold),
+            ForeColor = UiTheme.Text,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        }, 0, 0);
+        titles.Controls.Add(new Label
+        {
+            Text = "SERIAL WORKBENCH",
+            AutoSize = true,
+            Font = UiTheme.UiFont(7.5f, FontStyle.Bold),
+            ForeColor = UiTheme.Accent,
+            BackColor = Color.Transparent,
+            Margin = new Padding(1, 2, 0, 0),
+        }, 0, 1);
+        brand.Controls.Add(logo);
+        brand.Controls.Add(titles);
+
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Padding = new Padding(0, 17, 0, 0),
+            Margin = new Padding(0),
+        };
+        var addButton = new ThemedButton
+        {
+            Text = "＋  新建串口",
+            Kind = ThemedButtonKind.Primary,
+            Width = 136,
+            Height = 38,
+            Margin = new Padding(8, 0, 0, 0),
         };
         addButton.Click += (_, _) => OpenSessionPanel();
-        toolbar.Items.Add(addButton);
-        toolbar.Items.Add(new ToolStripSeparator());
-        var tileButton = new ToolStripButton("垂直平铺")
+        var tileButton = new ThemedButton
         {
-            ToolTipText = "把所有串口窗口左右等宽排开,一屏全见",
-            DisplayStyle = ToolStripItemDisplayStyle.Text,
+            Text = "▦  平铺窗口",
+            Kind = ThemedButtonKind.Secondary,
+            Width = 116,
+            Height = 38,
+            Margin = new Padding(8, 0, 0, 0),
         };
         tileButton.Click += (_, _) => TileSessionWindows();
-        toolbar.Items.Add(tileButton);
-        toolbar.Items.Add(new ToolStripSeparator());
-        var helpButton = new ToolStripButton("操作说明")
+        var helpButton = new ThemedButton
         {
-            ToolTipText = "软件操作说明书",
-            DisplayStyle = ToolStripItemDisplayStyle.Text,
+            Text = "?  操作说明",
+            Kind = ThemedButtonKind.Ghost,
+            Width = 112,
+            Height = 38,
+            Margin = new Padding(8, 0, 0, 0),
         };
         helpButton.Click += (_, _) =>
         {
             using var dialog = new HelpDialog();
-            dialog.ShowDialog(this); // 必须 this 为 owner,详见 OpenSessionPanel 内注释
+            dialog.ShowDialog(this);
         };
-        toolbar.Items.Add(helpButton);
+        actions.Controls.Add(addButton);
+        actions.Controls.Add(tileButton);
+        actions.Controls.Add(helpButton);
 
-        _dockPanel = new DockPanel { Dock = DockStyle.Fill };
-        _dockPanel.ActiveContentChanged += (_, _) => RefreshSendTarget();
-        _sharedSend = new SharedSendPanel { Dock = DockStyle.Bottom, Height = 156 };
-        _sharedSend.FramesRequested += () => OpenFramePanel(); // 数据帧入口在发送区按钮行
-        _emptyHint = new Label
-        {
-            Text = "点击左上角 + 新建串口面板",
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.DimGray,
-            Font = new Font("Microsoft YaHei UI", 14f),
-            BackColor = SystemColors.Control,
-        };
-        Controls.Add(_dockPanel);
-        Controls.Add(_sharedSend);
-        Controls.Add(toolbar);
-        Controls.Add(_emptyHint);
-        _emptyHint.BringToFront(); // 确保 hint 盖在 DockPanel 之上,首个面板打开后 Hide
+        layout.Controls.Add(brand, 0, 0);
+        layout.Controls.Add(actions, 1, 0);
+        header.Controls.Add(layout);
+        return header;
     }
 
-    private readonly Label _emptyHint = null!;
+    private Control BuildEmptyState()
+    {
+        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Bg };
+        host.Paint += (_, e) =>
+        {
+            using var dot = new SolidBrush(Color.FromArgb(24, 33, 44));
+            for (var x = 18; x < host.Width; x += 26)
+            {
+                for (var y = 18; y < host.Height; y += 26)
+                {
+                    e.Graphics.FillEllipse(dot, x, y, 2, 2);
+                }
+            }
+        };
+
+        var card = new ThemedPanel
+        {
+            Size = new Size(540, 262),
+            FillColor = UiTheme.Surface,
+            BorderColor = UiTheme.Border,
+            OuterColor = UiTheme.Bg,
+            CornerRadius = 16,
+            Padding = new Padding(30),
+        };
+        var content = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = UiTheme.Surface,
+            Padding = new Padding(0),
+            Margin = new Padding(0),
+        };
+        var eyebrow = new Label
+        {
+            Text = "●  READY FOR A NEW SESSION",
+            AutoSize = true,
+            Font = UiTheme.UiFont(7.5f, FontStyle.Bold),
+            ForeColor = UiTheme.Accent,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 14),
+        };
+        var title = new Label
+        {
+            Text = "准备开始一次串口会话",
+            AutoSize = true,
+            Font = UiTheme.UiFont(17f, FontStyle.Bold),
+            ForeColor = UiTheme.Text,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 10),
+        };
+        var body = new Label
+        {
+            Text = "配置端口、波特率与编码，打开连接后即可实时收发数据。\n所有串口会话共享底部发送区，点选窗口即可切换目标。",
+            AutoSize = true,
+            MaximumSize = new Size(465, 0),
+            Font = UiTheme.UiFont(10f),
+            ForeColor = UiTheme.TextMuted,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 22),
+        };
+        var startButton = new ThemedButton
+        {
+            Text = "＋  新建串口连接",
+            Kind = ThemedButtonKind.Primary,
+            Width = 154,
+            Height = 38,
+            Margin = new Padding(0),
+        };
+        startButton.Click += (_, _) => OpenSessionPanel();
+        content.Controls.Add(eyebrow);
+        content.Controls.Add(title);
+        content.Controls.Add(body);
+        content.Controls.Add(startButton);
+        card.Controls.Add(content);
+
+        void CenterCard()
+        {
+            card.Left = Math.Max(0, (host.ClientSize.Width - card.Width) / 2);
+            card.Top = Math.Max(0, (host.ClientSize.Height - card.Height) / 2);
+        }
+        host.Resize += (_, _) => CenterCard();
+        host.Controls.Add(card);
+        CenterCard();
+        return host;
+    }
+
+    private readonly Control _emptyHint = null!;
 
     /// <summary>从 exe 提取应用图标作为窗体/任务栏图标;提取失败退回默认图标,不影响启动。</summary>
     private static Icon TryLoadAppIcon()
@@ -153,7 +351,7 @@ internal sealed class MainForm : Form
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        _dockPanel.Theme = new VS2012LightTheme();
+        _dockPanel.Theme = new VS2012DarkTheme();
         // 启动工作区留空,不预开面板——串口面板只通过 + 号创建
     }
 
@@ -182,6 +380,7 @@ internal sealed class MainForm : Form
             Text = $"串口 {++_panelCount}",
             CloseButton = true,
             CloseButtonVisible = true,
+            BackColor = UiTheme.Bg,
         };
         panel.TitleChanged += title => content.Text = title;
         content.Controls.Add(panel);
@@ -206,6 +405,7 @@ internal sealed class MainForm : Form
             if (_dockPanel.Contents.Count == 0)
             {
                 _emptyHint.Show(); // 全部面板关闭后恢复空态提示
+                _emptyHint.BringToFront();
             }
         };
 
@@ -244,11 +444,15 @@ internal sealed class MainForm : Form
         _frameForm = new Form
         {
             Text = "数据帧",
-            Size = new Size(560, 460),
+            Size = new Size(680, 560),
+            MinimumSize = new Size(560, 420),
             StartPosition = FormStartPosition.CenterParent,
             ShowInTaskbar = false, // 工具型小窗,不占任务栏
             MinimizeBox = false,
+            BackColor = UiTheme.Bg,
+            Font = UiTheme.UiFont(),
         };
+        UiTheme.StyleForm(_frameForm);
         _frameForm.Controls.Add(framePanel);
         _frameForm.FormClosed += (_, _) => _frameForm = null;
         _frameForm.Show(this); // 非 modal、挂主窗体为 owner:主窗体最小化它跟着藏,关闭顺序也安全

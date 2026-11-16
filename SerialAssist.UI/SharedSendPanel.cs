@@ -15,9 +15,9 @@ internal sealed class SharedSendPanel : UserControl
     private SendTarget? _target;
     private readonly Label _targetLabel = null!;
     private readonly TextBox _sendBox = null!;
-    private readonly RadioButton _textRadio = null!;
-    private readonly RadioButton _hexRadio = null!;
-    private readonly ComboBox _lineEndingCombo = null!;
+    private readonly ChipRadio _textRadio = null!;
+    private readonly ChipRadio _hexRadio = null!;
+    private readonly ThemedSelect _lineEndingCombo = null!;
     private readonly Label _previewLabel = null!;
     private readonly Label _statusLabel = null!;
     private bool _suppressRadioConvert;
@@ -27,29 +27,127 @@ internal sealed class SharedSendPanel : UserControl
 
     public SharedSendPanel()
     {
-        _statusLabel = new Label { Text = "就绪", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(10, 6, 4, 0) };
+        BackColor = UiTheme.Bg;
+        Font = UiTheme.UiFont();
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1 };
+        var card = new ThemedPanel
+        {
+            Dock = DockStyle.Fill,
+            FillColor = UiTheme.Surface,
+            BorderColor = UiTheme.BorderSoft,
+            OuterColor = UiTheme.Bg,
+            CornerRadius = 14,
+            Padding = new Padding(16, 12, 16, 10),
+        };
+
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 3,
+            ColumnCount = 1,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        // ---- 目标行 ----
-        var targetRow = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoSize = true, Margin = new Padding(0) };
+        // ---- 标题行:发送台 / 当前目标 / 状态 ----
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 8),
+        };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        var left = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        left.Controls.Add(new Label
+        {
+            Text = "发送台",
+            AutoSize = true,
+            Font = UiTheme.UiFont(11f, FontStyle.Bold),
+            ForeColor = UiTheme.Text,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 3, 8, 0),
+        });
+        left.Controls.Add(new Label
+        {
+            Text = "SHARED CONSOLE",
+            AutoSize = true,
+            Font = UiTheme.UiFont(7f, FontStyle.Bold),
+            ForeColor = UiTheme.TextMuted,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 7, 18, 0),
+        });
+        left.Controls.Add(new Label
+        {
+            Text = "目标",
+            AutoSize = true,
+            Font = UiTheme.UiFont(8.5f),
+            ForeColor = UiTheme.TextMuted,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 5, 7, 0),
+        });
         _targetLabel = new Label
         {
-            Text = "未选择(点一下串口窗口)",
+            Text = "未选择 · 点一下串口窗口",
             AutoSize = true,
-            ForeColor = Color.Firebrick,
-            Margin = new Padding(2, 6, 6, 0),
-            Font = new Font(Font, FontStyle.Bold),
+            Font = UiTheme.UiFont(8.5f, FontStyle.Bold),
+            ForeColor = UiTheme.Warning,
+            BackColor = UiTheme.SurfaceAlt,
+            Padding = new Padding(10, 5, 10, 5),
+            Margin = new Padding(0, 1, 0, 0),
         };
-        targetRow.Controls.Add(new Label { Text = " 发送到:", AutoSize = true, Margin = new Padding(4, 6, 0, 0) });
-        targetRow.Controls.Add(_targetLabel);
-        targetRow.Controls.Add(_statusLabel);
+        _targetLabel.Resize += (_, _) => RoundLabel(_targetLabel, 7);
+        left.Controls.Add(_targetLabel);
 
-        // ---- 发送输入区 ----
-        _sendBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, Font = new Font("Consolas", 9.5f) };
+        _statusLabel = new Label
+        {
+            Text = "就绪",
+            AutoSize = true,
+            Font = UiTheme.UiFont(8.5f),
+            ForeColor = UiTheme.TextMuted,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 6, 2, 0),
+            TextAlign = ContentAlignment.MiddleRight,
+        };
+        header.Controls.Add(left, 0, 0);
+        header.Controls.Add(_statusLabel, 1, 0);
+
+        // ---- 输入区 + 右侧操作区 ----
+        var inputWrap = new ThemedPanel
+        {
+            Dock = DockStyle.Fill,
+            FillColor = UiTheme.ReceiveBg,
+            BorderColor = UiTheme.Border,
+            OuterColor = UiTheme.Surface,
+            CornerRadius = 10,
+            Padding = new Padding(12, 8, 12, 8),
+            Margin = new Padding(0, 0, 12, 0),
+        };
+        _sendBox = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            BorderStyle = BorderStyle.None,
+            BackColor = UiTheme.ReceiveBg,
+            ForeColor = UiTheme.Text,
+            Font = UiTheme.MonoFont(10f),
+            PlaceholderText = "输入要发送的内容…  Enter 发送，Shift+Enter 换行",
+        };
         // 回车即发送(Shift+Enter 才换行),与原每口发送区习惯一致
         _sendBox.KeyDown += (_, e) =>
         {
@@ -59,54 +157,127 @@ internal sealed class SharedSendPanel : UserControl
                 OnSendClicked();
             }
         };
-        _textRadio = new RadioButton { Text = "文本", Checked = true, AutoSize = true };
-        _hexRadio = new RadioButton { Text = "HEX", AutoSize = true };
+        inputWrap.Controls.Add(_sendBox);
+
+        _textRadio = new ChipRadio { Text = "文本", Checked = true };
+        _hexRadio = new ChipRadio { Text = "HEX" };
         // 切换模式 = 同一份数据换显示形态(文本↔HEX 互转,行尾不掺入,发送时才附加)
         // 只响应"被选中"的那次:取消选中的 CheckedChanged 也会触发,不挡会把刚转的内容转回去
         _textRadio.CheckedChanged += (_, _) => { if (_textRadio.Checked) OnSendModeChanged(toText: true); };
         _hexRadio.CheckedChanged += (_, _) => { if (_hexRadio.Checked) OnSendModeChanged(toText: false); };
         // 行尾默认 CR(多数 CLI 设备只认回车);映射统一走 NewlineOptions,禁止强转索引(顺序错位事故)
         // 仅文本模式生效;HEX 模式下所有口发同一份字节,行尾不参与
-        _lineEndingCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
-        _lineEndingCombo.Items.AddRange(NewlineOptions.DisplayNames);
+        _lineEndingCombo = new ThemedSelect { Width = 100 };
+        _lineEndingCombo.AddRange(NewlineOptions.DisplayNames);
         _lineEndingCombo.SelectedIndex = 0;
         _lineEndingCombo.SelectedIndexChanged += (_, _) => UpdateSendPreview();
 
-        var sendButton = new Button { Text = "发送", Width = 64, Height = 30 };
-        sendButton.Click += (_, _) => OnSendClicked();
-        var clearSendButton = new Button { Text = "清空", Width = 64, Height = 30 };
-        clearSendButton.Click += (_, _) => _sendBox.Clear();
-        var fileButton = new Button { Text = "发送文件", Width = 84, Height = 30 };
-        fileButton.Click += (_, _) => OnSendFileClicked();
-        // 数据帧与发送同属"发什么"一族,入口放发送区;面板全软件一个,发往当前点选的串口
-        var frameButton = new Button { Text = "数据帧", Width = 84, Height = 30 };
-        frameButton.Click += (_, _) => FramesRequested?.Invoke();
-
-        var modeRow = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0) };
+        var modeRow = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 7),
+        };
         modeRow.Controls.Add(_textRadio);
+        modeRow.Controls.Add(new Panel { Width = 6, Height = 1, BackColor = Color.Transparent, Margin = new Padding(0) });
         modeRow.Controls.Add(_hexRadio);
-        modeRow.Controls.Add(new Label { Text = " 行尾:", AutoSize = true, Margin = new Padding(6, 6, 0, 0) });
+        modeRow.Controls.Add(new Label
+        {
+            Text = "行尾",
+            AutoSize = true,
+            Font = UiTheme.UiFont(8f),
+            ForeColor = UiTheme.TextMuted,
+            BackColor = Color.Transparent,
+            Margin = new Padding(8, 7, 5, 0),
+        });
         modeRow.Controls.Add(_lineEndingCombo);
 
-        // 按钮横排放一行:竖排会被面板高度裁掉不可见(踩过两次的坑)
-        var buttonRow = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0) };
-        buttonRow.Controls.Add(sendButton);
-        buttonRow.Controls.Add(clearSendButton);
-        buttonRow.Controls.Add(fileButton);
-        buttonRow.Controls.Add(frameButton);
+        var sendButton = new ThemedButton
+        {
+            Text = "发送  ↵",
+            Kind = ThemedButtonKind.Primary,
+            Width = 104,
+            Height = 40,
+            Margin = new Padding(0, 0, 8, 7),
+        };
+        sendButton.Click += (_, _) => OnSendClicked();
+        var clearSendButton = new ThemedButton
+        {
+            Text = "清空",
+            Kind = ThemedButtonKind.Secondary,
+            Width = 64,
+            Height = 40,
+            Margin = new Padding(0, 0, 0, 7),
+        };
+        clearSendButton.Click += (_, _) => _sendBox.Clear();
+        var fileButton = new ThemedButton
+        {
+            Text = "发送文件",
+            Kind = ThemedButtonKind.Secondary,
+            Width = 96,
+            Height = 30,
+            Margin = new Padding(0, 0, 7, 0),
+        };
+        fileButton.Click += (_, _) => OnSendFileClicked();
+        // 数据帧与发送同属"发什么"一族,入口放发送区;面板全软件一个,发往当前点选的串口
+        var frameButton = new ThemedButton
+        {
+            Text = "数据帧",
+            Kind = ThemedButtonKind.Secondary,
+            Width = 96,
+            Height = 30,
+            Margin = new Padding(0),
+        };
+        frameButton.Click += (_, _) => FramesRequested?.Invoke();
 
-        var side = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Padding = new Padding(4, 2, 4, 2) };
-        side.Controls.Add(modeRow);
-        side.Controls.Add(buttonRow);
+        var primaryRow = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        primaryRow.Controls.Add(sendButton);
+        primaryRow.Controls.Add(clearSendButton);
+        var secondaryRow = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        secondaryRow.Controls.Add(fileButton);
+        secondaryRow.Controls.Add(frameButton);
 
-        var sendLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
-        sendLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        sendLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        sendLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        sendLayout.Controls.Add(_sendBox, 0, 0);
-        sendLayout.Controls.Add(side, 1, 0);
-        var sendGroup = new GroupBox { Text = "发送区(共用,点选目标串口)", Dock = DockStyle.Fill };
-        sendGroup.Controls.Add(sendLayout);
+        var actions = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+        };
+        actions.Controls.Add(modeRow);
+        actions.Controls.Add(primaryRow);
+        actions.Controls.Add(secondaryRow);
+
+        var inputLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        inputLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        inputLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        inputLayout.Controls.Add(inputWrap, 0, 0);
+        inputLayout.Controls.Add(actions, 1, 0);
 
         // ---- 预览行 ----
         _previewLabel = new Label
@@ -114,27 +285,38 @@ internal sealed class SharedSendPanel : UserControl
             Dock = DockStyle.Fill,
             AutoSize = false,
             AutoEllipsis = true,
-            Height = 20,
-            TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-            ForeColor = Color.DimGray,
+            Height = 22,
+            Font = UiTheme.MonoFont(8.25f),
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = UiTheme.TextMuted,
             Text = "预览:",
-            Margin = new Padding(3, 0, 3, 2),
+            Margin = new Padding(2, 7, 2, 0),
         };
         _sendBox.TextChanged += (_, _) => UpdateSendPreview();
 
-        root.Controls.Add(targetRow, 0, 0);
-        root.Controls.Add(sendGroup, 0, 1);
+        root.Controls.Add(header, 0, 0);
+        root.Controls.Add(inputLayout, 0, 1);
         root.Controls.Add(_previewLabel, 0, 2);
-        Controls.Add(root);
+        card.Controls.Add(root);
+        Controls.Add(card);
         UpdateSendPreview();
+    }
+
+    private static void RoundLabel(Label label, int radius)
+    {
+        using var path = UiTheme.RoundedRect(new Rectangle(0, 0, label.Width, label.Height), radius);
+        label.Region?.Dispose();
+        label.Region = new Region(path);
     }
 
     /// <summary>MainForm 在活动窗口变化时调用,更新目标串口(点选哪个串口窗口就是哪个)。</summary>
     public void SetTarget(SendTarget? target)
     {
         _target = target;
-        _targetLabel.Text = target?.Name ?? "未选择(点一下串口窗口)";
-        _targetLabel.ForeColor = target is null ? Color.Firebrick : Color.FromArgb(0, 70, 130);
+        _targetLabel.Text = target?.Name ?? "未选择 · 点一下串口窗口";
+        _targetLabel.ForeColor = target is null ? UiTheme.Warning : UiTheme.Accent;
+        _targetLabel.BackColor = target is null ? UiTheme.SurfaceAlt : UiTheme.AccentSoft;
+        RoundLabel(_targetLabel, 7);
         UpdateSendPreview();
     }
 
@@ -315,7 +497,7 @@ internal sealed class SharedSendPanel : UserControl
         if (!_statusLabel.IsDisposed)
         {
             _statusLabel.Text = text;
-            _statusLabel.ForeColor = color;
+            _statusLabel.ForeColor = UiTheme.StatusColor(color);
         }
     }
 }

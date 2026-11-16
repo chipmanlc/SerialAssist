@@ -41,13 +41,13 @@ internal static class ChecksumOptions
 internal sealed class FrameEditDialog : Form
 {
     private readonly TextBox _nameBox = new() { Dock = DockStyle.Fill };
-    private readonly RadioButton _textRadio = new() { Text = "文本", AutoSize = true };
-    private readonly RadioButton _hexRadio = new() { Text = "HEX", Checked = true, AutoSize = true };
-    private readonly TextBox _payloadBox = new() { Dock = DockStyle.Fill, Multiline = true, Height = 60, Font = new Font("Consolas", 9.5f) };
-    private readonly ComboBox _checksumCombo = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ChipRadio _textRadio = new() { Text = "文本" };
+    private readonly ChipRadio _hexRadio = new() { Text = "HEX", Checked = true };
+    private readonly TextBox _payloadBox = new() { Dock = DockStyle.Fill, Multiline = true, Height = 84 };
+    private readonly ThemedSelect _checksumCombo = new() { Dock = DockStyle.Fill };
     private readonly NumericUpDown _delayBox = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 60_000, Value = 0 };
-    private readonly Label _errorLabel = new() { Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = Color.DimGray, TextAlign = ContentAlignment.MiddleLeft };
-    private readonly Button _okButton = new() { Text = "确定", DialogResult = DialogResult.OK, Width = 80 };
+    private readonly Label _errorLabel = new() { Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = UiTheme.TextMuted, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly ThemedButton _okButton = new() { Text = "确定", Kind = ThemedButtonKind.Primary, DialogResult = DialogResult.OK, Width = 88, Height = 36 };
     private readonly Encoding _encoding;
 
     public DataFrame? Result { get; private set; }
@@ -60,14 +60,70 @@ internal sealed class FrameEditDialog : Form
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
+        ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(420, 260);
+        ClientSize = new Size(500, 452);
+        BackColor = UiTheme.Bg;
+        ForeColor = UiTheme.Text;
+        Font = UiTheme.UiFont();
+        UiTheme.StyleForm(this);
 
-        _checksumCombo.Items.AddRange(ChecksumOptions.Items.Select(i => i.Name).ToArray());
+        _checksumCombo.AddRange(ChecksumOptions.Items.Select(i => i.Name).ToArray());
         _checksumCombo.SelectedIndex = existing is null ? 0 : ChecksumOptions.IndexOf(existing.Checksum);
+        UiTheme.StyleTextBox(_nameBox);
+        UiTheme.StyleTextBox(_payloadBox, mono: true);
+        _delayBox.BackColor = UiTheme.SurfaceAlt;
+        _delayBox.ForeColor = UiTheme.Text;
+        _delayBox.BorderStyle = BorderStyle.FixedSingle;
+        _delayBox.Font = UiTheme.UiFont(9f);
 
-        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6, Padding = new Padding(10) };
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
+        var header = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 82,
+            BackColor = UiTheme.BgElevated,
+            Padding = new Padding(24, 16, 24, 10),
+        };
+        header.Controls.Add(new Label
+        {
+            Text = existing is null ? "新增报文帧" : "编辑报文帧",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = UiTheme.UiFont(15f, FontStyle.Bold),
+            ForeColor = UiTheme.Text,
+            BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft,
+        });
+        header.Controls.Add(new Label
+        {
+            Text = "FRAME EDITOR · TEXT / HEX PAYLOAD",
+            Dock = DockStyle.Bottom,
+            Height = 20,
+            Font = UiTheme.UiFont(7.5f, FontStyle.Bold),
+            ForeColor = UiTheme.Accent,
+            BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft,
+        });
+
+        var bodyHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Bg, Padding = new Padding(18, 12, 18, 0) };
+        var card = new ThemedPanel
+        {
+            Dock = DockStyle.Fill,
+            FillColor = UiTheme.Surface,
+            BorderColor = UiTheme.BorderSoft,
+            OuterColor = UiTheme.Bg,
+            CornerRadius = 14,
+            Padding = new Padding(18, 14, 18, 12),
+        };
+        var grid = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 6,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (var i = 0; i < 5; i++)
         {
@@ -77,38 +133,70 @@ internal sealed class FrameEditDialog : Form
 
         void AddRow(int row, string label, Control control)
         {
-            grid.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+            grid.Controls.Add(new Label
+            {
+                Text = label,
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Font = UiTheme.UiFont(9f),
+                ForeColor = UiTheme.TextMuted,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, 7, 10, 7),
+            }, 0, row);
+            control.Margin = new Padding(0, 4, 0, 4);
             grid.Controls.Add(control, 1, row);
         }
 
-        AddRow(0, "名称:", _nameBox);
+        AddRow(0, "名称", _nameBox);
 
-        var modeRow = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0) };
+        var modeRow = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
         modeRow.Controls.Add(_textRadio);
+        modeRow.Controls.Add(new Panel { Width = 6, Height = 1, BackColor = Color.Transparent });
         modeRow.Controls.Add(_hexRadio);
         // 只响应"被选中"的那次:取消选中的 CheckedChanged 也会触发
         _textRadio.CheckedChanged += (_, _) => { if (_textRadio.Checked) OnInputModeChanged(); };
         _hexRadio.CheckedChanged += (_, _) => { if (_hexRadio.Checked) OnInputModeChanged(); };
-        AddRow(1, "输入模式:", modeRow);
-        AddRow(2, "内容:", _payloadBox);
-        AddRow(3, "校验:", _checksumCombo);
-        AddRow(4, "帧后延时:", _delayBox);
+        AddRow(1, "输入模式", modeRow);
+        AddRow(2, "内容", _payloadBox);
+        AddRow(3, "校验", _checksumCombo);
+        AddRow(4, "帧后延时", _delayBox);
         grid.Controls.Add(_errorLabel, 1, 5);
 
+        card.Controls.Add(grid);
+        bodyHost.Controls.Add(card);
+
+        var cancelButton = new ThemedButton
+        {
+            Text = "取消",
+            Kind = ThemedButtonKind.Ghost,
+            DialogResult = DialogResult.Cancel,
+            Width = 84,
+            Height = 36,
+            Margin = new Padding(8, 0, 0, 0),
+        };
         var buttons = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
             FlowDirection = FlowDirection.RightToLeft,
-            Padding = new Padding(10),
-            AutoSize = true,
+            Height = 58,
+            Padding = new Padding(18, 10, 18, 10),
+            BackColor = UiTheme.Bg,
         };
-        buttons.Controls.Add(new Button { Text = "取消", DialogResult = DialogResult.Cancel, Width = 80 });
         buttons.Controls.Add(_okButton);
+        buttons.Controls.Add(cancelButton);
 
-        Controls.Add(grid);
+        Controls.Add(bodyHost);
         Controls.Add(buttons);
+        Controls.Add(header);
         AcceptButton = _okButton;
-        CancelButton = (Button)buttons.Controls[0]!;
+        CancelButton = cancelButton;
 
         if (existing is not null)
         {
@@ -161,13 +249,13 @@ internal sealed class FrameEditDialog : Form
         else if (ok)
         {
             _errorLabel.Text = $"共 {bytes.Length} 字节:{TruncateHex(bytes)}";
-            _errorLabel.ForeColor = Color.ForestGreen;
+            _errorLabel.ForeColor = UiTheme.Success;
             _okButton.Enabled = true;
         }
         else
         {
             _errorLabel.Text = error;
-            _errorLabel.ForeColor = Color.Firebrick;
+            _errorLabel.ForeColor = UiTheme.Danger;
             _okButton.Enabled = false;
         }
     }
@@ -177,7 +265,7 @@ internal sealed class FrameEditDialog : Form
         _errorLabel.Text = _hexRadio.Checked
             ? "输入 HEX 字节,可用空格/逗号分隔"
             : "输入文本,支持转义:\\r \\n \\t \\0 \\\\ \\xHH";
-        _errorLabel.ForeColor = Color.DimGray;
+        _errorLabel.ForeColor = UiTheme.TextMuted;
     }
 
     private static string TruncateHex(byte[] bytes)

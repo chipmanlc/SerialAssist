@@ -16,15 +16,15 @@ internal sealed class FramePanel : UserControl
     // 目标名实时取(与共享发送区同一目标):null = 还没点选任何串口窗口
     private readonly Func<string?> _targetName;
     private readonly ListView _list;
-    private readonly Button _loopButton;
+    private readonly ThemedButton _loopButton;
     private readonly Label _statusLabel;
-    private readonly Button _newButton = null!;
-    private readonly Button _editButton = null!;
-    private readonly Button _deleteButton = null!;
-    private readonly Button _upButton = null!;
-    private readonly Button _downButton = null!;
-    private readonly Button _sendSelButton = null!;
-    private readonly Button _sendEnabledButton = null!;
+    private readonly ThemedButton _newButton = null!;
+    private readonly ThemedButton _editButton = null!;
+    private readonly ThemedButton _deleteButton = null!;
+    private readonly ThemedButton _upButton = null!;
+    private readonly ThemedButton _downButton = null!;
+    private readonly ThemedButton _sendSelButton = null!;
+    private readonly ThemedButton _sendEnabledButton = null!;
     private CancellationTokenSource? _loopCts;
     private bool _suppressCheckSync;
 
@@ -34,40 +34,115 @@ internal sealed class FramePanel : UserControl
         _sender = sender;
         _encoding = encoding ?? (() => Encoding.GetEncoding("GBK"));
         _targetName = targetName ?? (() => null);
-        // 字体按用户要求用 Times New Roman(西文衬线;中文字形系统自动回退,整体偏传统纸质感)
-        Font = new Font("Times New Roman", 10f);
+        BackColor = UiTheme.Bg;
+        ForeColor = UiTheme.Text;
+        Font = UiTheme.UiFont();
 
-        _newButton = new Button { Text = "新增", Width = 56 };
-        _editButton = new Button { Text = "编辑", Width = 56 };
-        _deleteButton = new Button { Text = "删除", Width = 56 };
-        _upButton = new Button { Text = "上移", Width = 56 };
-        _downButton = new Button { Text = "下移", Width = 56 };
+        var card = new ThemedPanel
+        {
+            Dock = DockStyle.Fill,
+            FillColor = UiTheme.Surface,
+            BorderColor = UiTheme.BorderSoft,
+            OuterColor = UiTheme.Bg,
+            CornerRadius = 14,
+            Padding = new Padding(14, 12, 14, 12),
+        };
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 3,
+            ColumnCount = 1,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        _newButton = new ThemedButton { Text = "＋ 新增", Kind = ThemedButtonKind.Primary, Width = 76, Height = 30, Margin = new Padding(0, 0, 7, 0) };
+        _editButton = new ThemedButton { Text = "编辑", Kind = ThemedButtonKind.Secondary, Width = 60, Height = 30, Margin = new Padding(0, 0, 7, 0) };
+        _deleteButton = new ThemedButton { Text = "删除", Kind = ThemedButtonKind.Danger, Width = 60, Height = 30, Margin = new Padding(0, 0, 7, 0) };
+        _upButton = new ThemedButton { Text = "上移", Kind = ThemedButtonKind.Ghost, Width = 60, Height = 30, Margin = new Padding(0, 0, 7, 0) };
+        _downButton = new ThemedButton { Text = "下移", Kind = ThemedButtonKind.Ghost, Width = 60, Height = 30, Margin = new Padding(0, 0, 0, 0) };
         _newButton.Click += (_, _) => EditFrame(-1);
         _editButton.Click += (_, _) => EditFrame(FirstSelected());
         _deleteButton.Click += (_, _) => DeleteSelected();
         _upButton.Click += (_, _) => MoveSelected(-1);
         _downButton.Click += (_, _) => MoveSelected(1);
 
-        _sendSelButton = new Button { Text = "单发", Width = 60 };
-        _sendEnabledButton = new Button { Text = "连发", Width = 60 };
-        _loopButton = new Button { Text = "循环", Width = 60 };
+        _sendSelButton = new ThemedButton { Text = "单发", Kind = ThemedButtonKind.Primary, Width = 72, Height = 32, Margin = new Padding(0, 0, 7, 0) };
+        _sendEnabledButton = new ThemedButton { Text = "连发", Kind = ThemedButtonKind.Secondary, Width = 72, Height = 32, Margin = new Padding(0, 0, 7, 0) };
+        _loopButton = new ThemedButton { Text = "循环", Kind = ThemedButtonKind.Secondary, Width = 72, Height = 32, Margin = new Padding(0, 0, 10, 0) };
         _sendSelButton.Click += (_, _) => SendExplicit();
         _sendEnabledButton.Click += (_, _) => SendEnabled();
         _loopButton.Click += (_, _) => ToggleLoop();
-        _statusLabel = new Label { Text = "就绪", AutoSize = true, ForeColor = Color.DimGray, Anchor = AnchorStyles.Left };
-
-        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Top, WrapContents = false, AutoSize = true, Padding = new Padding(4) };
-        foreach (var b in new[] { _newButton, _editButton, _deleteButton, _upButton, _downButton })
+        _statusLabel = new Label
         {
-            toolbar.Controls.Add(b);
-        }
+            Text = "就绪",
+            AutoSize = true,
+            ForeColor = UiTheme.TextMuted,
+            BackColor = Color.Transparent,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 8, 0, 0),
+            Font = UiTheme.UiFont(8.5f),
+        };
 
-        var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, WrapContents = false, AutoSize = true, Padding = new Padding(4) };
-        bottom.Controls.Add(_sendSelButton);
-        bottom.Controls.Add(_sendEnabledButton);
-        bottom.Controls.Add(_loopButton);
-        bottom.Controls.Add(_statusLabel);
+        // ---- 页头 ----
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 10),
+        };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var titleStack = new TableLayoutPanel
+        {
+            ColumnCount = 1,
+            RowCount = 2,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        titleStack.Controls.Add(new Label
+        {
+            Text = "数据帧",
+            AutoSize = true,
+            Font = UiTheme.UiFont(13f, FontStyle.Bold),
+            ForeColor = UiTheme.Text,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        }, 0, 0);
+        titleStack.Controls.Add(new Label
+        {
+            Text = "COMMAND FRAMES · 发往当前点选的串口",
+            AutoSize = true,
+            Font = UiTheme.UiFont(7.5f, FontStyle.Bold),
+            ForeColor = UiTheme.Accent,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 3, 0, 0),
+        }, 0, 1);
+        var toolbar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            WrapContents = false,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        toolbar.Controls.Add(_newButton);
+        toolbar.Controls.Add(_editButton);
+        toolbar.Controls.Add(_deleteButton);
+        toolbar.Controls.Add(_upButton);
+        toolbar.Controls.Add(_downButton);
+        header.Controls.Add(titleStack, 0, 0);
+        header.Controls.Add(toolbar, 1, 0);
 
+        // ---- 列表 ----
         _list = new ListView
         {
             Dock = DockStyle.Fill,
@@ -76,17 +151,74 @@ internal sealed class FramePanel : UserControl
             MultiSelect = true,
             CheckBoxes = true,
             HideSelection = false,
+            HeaderStyle = ColumnHeaderStyle.None,
+            BorderStyle = BorderStyle.None,
+            BackColor = UiTheme.ReceiveBg,
+            ForeColor = UiTheme.TextSecondary,
+            Font = UiTheme.UiFont(9f),
+            OwnerDraw = true,
+            Margin = new Padding(0),
         };
         _list.Columns.Add("名称", 120);
-        _list.Columns.Add("HEX 内容", 210);
-        _list.Columns.Add("校验", 95);
-        _list.Columns.Add("延时ms", 60);
+        _list.Columns.Add("HEX 内容", 230);
+        _list.Columns.Add("校验", 120);
+        _list.Columns.Add("延时ms", 70);
         _list.ItemChecked += OnItemChecked;
         _list.DoubleClick += (_, _) => EditFrame(FirstSelected());
+        _list.DrawItem += (_, e) => e.DrawDefault = true;
+        _list.DrawSubItem += (_, e) => e.DrawDefault = true;
+        var listHeader = new Panel { Dock = DockStyle.Top, Height = 28, BackColor = UiTheme.SurfaceAlt };
+        listHeader.Paint += (_, e) =>
+        {
+            using var bottomPen = new Pen(UiTheme.Border);
+            e.Graphics.DrawLine(bottomPen, 0, listHeader.Height - 1, listHeader.Width, listHeader.Height - 1);
+            using var font = UiTheme.UiFont(8.5f, FontStyle.Bold);
+            var flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis;
+            var headers = new[] { "名称", "HEX 内容", "校验", "延时ms" };
+            var x = 0;
+            for (var i = 0; i < headers.Length && i < _list.Columns.Count; i++)
+            {
+                var columnWidth = _list.Columns[i].Width;
+                var left = x + (i == 0 ? 28 : 8);
+                var width = Math.Max(0, columnWidth - (i == 0 ? 36 : 14));
+                System.Windows.Forms.TextRenderer.DrawText(e.Graphics, headers[i], font,
+                    new Rectangle(left, 0, width, listHeader.Height), UiTheme.TextMuted, flags);
+                x += columnWidth;
+            }
+        };
+        var listCard = new ThemedPanel
+        {
+            Dock = DockStyle.Fill,
+            FillColor = UiTheme.ReceiveBg,
+            BorderColor = UiTheme.Border,
+            OuterColor = UiTheme.Surface,
+            CornerRadius = 10,
+            Padding = new Padding(2, 2, 2, 2),
+            Margin = new Padding(0, 0, 0, 10),
+        };
+        listCard.Controls.Add(_list);
+        listCard.Controls.Add(listHeader);
 
-        Controls.Add(_list);
-        Controls.Add(bottom);
-        Controls.Add(toolbar);
+        // ---- 底部发送操作 ----
+        var bottom = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            WrapContents = false,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        bottom.Controls.Add(_sendSelButton);
+        bottom.Controls.Add(_sendEnabledButton);
+        bottom.Controls.Add(_loopButton);
+        bottom.Controls.Add(_statusLabel);
+
+        root.Controls.Add(header, 0, 0);
+        root.Controls.Add(listCard, 0, 1);
+        root.Controls.Add(bottom, 0, 2);
+        card.Controls.Add(root);
+        Controls.Add(card);
 
         RebuildList();
     }
@@ -200,7 +332,7 @@ internal sealed class FramePanel : UserControl
         if (!_statusLabel.IsDisposed)
         {
             _statusLabel.Text = text;
-            _statusLabel.ForeColor = color;
+            _statusLabel.ForeColor = UiTheme.StatusColor(color);
         }
     }
 

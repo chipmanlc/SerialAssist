@@ -9,43 +9,94 @@ internal sealed class HelpDialog : Form
     public HelpDialog()
     {
         Text = "操作说明";
-        Font = new Font("Microsoft YaHei UI", 9f);
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        Size = new Size(680, 680);
+        Size = new Size(760, 760);
+        MinimumSize = new Size(620, 520);
+        BackColor = UiTheme.Bg;
+        ForeColor = UiTheme.Text;
+        Font = UiTheme.UiFont();
+        UiTheme.StyleForm(this);
 
+        var header = new Panel { Dock = DockStyle.Top, Height = 82, BackColor = UiTheme.BgElevated, Padding = new Padding(24, 16, 24, 10) };
+        header.Controls.Add(new Label
+        {
+            Text = "操作说明",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = UiTheme.UiFont(16f, FontStyle.Bold),
+            ForeColor = UiTheme.Text,
+            BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft,
+        });
+        header.Controls.Add(new Label
+        {
+            Text = "USER MANUAL · CHEN SERIAL ASSISTANT",
+            Dock = DockStyle.Bottom,
+            Height = 20,
+            Font = UiTheme.UiFont(7.5f, FontStyle.Bold),
+            ForeColor = UiTheme.Accent,
+            BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft,
+        });
+
+        var bodyHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Bg, Padding = new Padding(18, 12, 18, 0) };
+        var card = new ThemedPanel
+        {
+            Dock = DockStyle.Fill,
+            FillColor = UiTheme.Surface,
+            BorderColor = UiTheme.BorderSoft,
+            OuterColor = UiTheme.Bg,
+            CornerRadius = 14,
+            Padding = new Padding(20, 16, 14, 14),
+        };
         var box = new RichTextBox
         {
             Dock = DockStyle.Fill,
             ReadOnly = true,
-            BackColor = Color.White,
+            BackColor = UiTheme.Surface,
+            ForeColor = UiTheme.TextSecondary,
             BorderStyle = BorderStyle.None,
+            Font = UiTheme.UiFont(9.5f),
+            DetectUrls = false,
         };
-        var closeButton = new Button { Text = "关闭", DialogResult = DialogResult.Cancel, Width = 88, Height = 28 };
+        card.Controls.Add(box);
+        bodyHost.Controls.Add(card);
+
+        var closeButton = new ThemedButton
+        {
+            Text = "关闭",
+            Kind = ThemedButtonKind.Primary,
+            DialogResult = DialogResult.Cancel,
+            Width = 92,
+            Height = 36,
+            Margin = new Padding(8, 0, 0, 0),
+        };
         var bottom = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
             FlowDirection = FlowDirection.RightToLeft,
-            AutoSize = true,
-            Padding = new Padding(8),
+            Height = 60,
+            Padding = new Padding(18, 12, 18, 12),
+            BackColor = UiTheme.Bg,
         };
         bottom.Controls.Add(closeButton);
-        Controls.Add(box);
+        Controls.Add(bodyHost);
         Controls.Add(bottom);
+        Controls.Add(header);
         CancelButton = closeButton;
 
         AppendManual(box);
     }
-
     private static void AppendManual(RichTextBox box)
     {
         Heading("CHEN串口助手 使用说明");
         Blank();
 
         Heading("一、开始使用");
-        Body("· 点左上角「+」,选好串口号和波特率等参数,确定后会自动连上串口开始收发。");
-        Body("· 可以同时开多个串口,每个串口一个页面。点工具栏「垂直平铺」,所有窗口排成两列网格(3 个=上二下一,4 个=上二下二……),一屏全见;窗口变窄时接收区的按钮会自动折行,功能不缺。");
+        Body("· 点右上角「＋ 新建串口」,选好串口号和波特率等参数,确定后会自动连上串口开始收发。");
+        Body("· 可以同时开多个串口,每个串口一个页面。点顶部「平铺窗口」,所有窗口排成两列网格(3 个=上二下一,4 个=上二下二……),一屏全见;窗口变窄时接收区的按钮会自动折行,功能不缺。");
         Body("· 一般参数保持默认即可;连不上或收不到数据时,先检查串口号和波特率是否与设备一致。");
         Blank();
 
@@ -54,7 +105,7 @@ internal sealed class HelpDialog : Form
         Body("· 想仔细看某段内容:用滚轮或滚动条往上翻,新数据不会把画面拽走,状态栏显示「回滚预览中」;看完拉回最底就恢复。");
         Body("· 看完了:把滚动条拉回最底下,或点「跳到最新」,就恢复自动滚动。");
         Body("· 字太小:按住 Ctrl 再滚滚轮,可以放大缩小。");
-        Body("· 「清除屏幕&回滚」:把画面清空重来,你调好的字体大小会保留。");
+        Body("· 「清除屏幕」:把画面清空重来,你调好的字体大小会保留。");
         Body("· 中文乱码:换一下编码(GBK / UTF-8 / ASCII)再试。");
         Body("· 可以切换 文本 / HEX 两种显示,也可以开关时间戳。");
         Body("· 数据特别快时画面会自动跳到最新,中间部分可能略过;需要完整记录请开日志(见第六节)。");
@@ -97,17 +148,17 @@ internal sealed class HelpDialog : Form
 
         void Heading(string text)
         {
-            AppendLine(box, text, FontStyle.Bold, Color.FromArgb(0, 70, 130));
+            AppendLine(box, text, FontStyle.Bold, UiTheme.Accent);
         }
 
         void Body(string text)
         {
-            AppendLine(box, text, FontStyle.Regular, Color.Black);
+            AppendLine(box, text, FontStyle.Regular, UiTheme.TextSecondary);
         }
 
         void Blank()
         {
-            AppendLine(box, string.Empty, FontStyle.Regular, Color.Black);
+            AppendLine(box, string.Empty, FontStyle.Regular, UiTheme.TextSecondary);
         }
 
         void AppendLine(RichTextBox box, string text, FontStyle style, Color color)

@@ -34,16 +34,18 @@ internal sealed class SessionPanel : UserControl
     private bool _suppressLogDialog;
 
     private PortConfig? _config;
-    private Button _openCloseButton = null!;
+    private ThemedButton _openCloseButton = null!;
     private RichTextBox _receiveBox = null!;
-    private RadioButton _recvTextRadio = null!;
-    private RadioButton _recvHexRadio = null!;
-    private CheckBox _timestampCheck = null!;
-    private ComboBox _encodingCombo = null!;
-    private CheckBox _logCheck = null!;
+    private ChipRadio _recvTextRadio = null!;
+    private ChipRadio _recvHexRadio = null!;
+    private ChipCheckBox _timestampCheck = null!;
+    private ThemedSelect _encodingCombo = null!;
+    private SwitchCheckBox _logCheck = null!;
     private Label _logPathLabel = null!;
     private Label _statusLabel = null!;
-
+    private Label _portLabel = null!;
+    private Label _stateLabel = null!;
+    private Label _stateDot = null!;
     /// <summary>状态变化时上抛建议标题(如 "COM5 · 已打开"),供停靠面板标题用。</summary>
     public event Action<string>? TitleChanged;
 
@@ -73,65 +75,245 @@ internal sealed class SessionPanel : UserControl
 
     private Control BuildReceiveArea()
     {
-        var group = new GroupBox { Text = "接收区", Dock = DockStyle.Fill };
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };
+        BackColor = UiTheme.Bg;
+        var card = new ThemedPanel
+        {
+            Dock = DockStyle.Fill,
+            FillColor = UiTheme.Surface,
+            BorderColor = UiTheme.BorderSoft,
+            OuterColor = UiTheme.Bg,
+            CornerRadius = 14,
+            Padding = new Padding(14, 12, 14, 10),
+        };
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 4,
+            ColumnCount = 1,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        // WrapContents=true:窗口窄(平铺/网格)时按钮自动折行,状态栏永远完整可见
-        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
-        _openCloseButton = new Button { Text = "打开", Width = 64, Height = 24 };
+        // ---- 端口 / 连接状态 ----
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 10),
+        };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var headerLeft = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0),
+        };
+        _stateDot = new Label
+        {
+            Text = "●",
+            AutoSize = true,
+            Font = UiTheme.UiFont(11f),
+            ForeColor = UiTheme.TextMuted,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 2, 7, 0),
+        };
+        _portLabel = new Label
+        {
+            Text = "未配置端口",
+            AutoSize = true,
+            Font = UiTheme.UiFont(12f, FontStyle.Bold),
+            ForeColor = UiTheme.Text,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 1, 10, 0),
+        };
+        _stateLabel = new Label
+        {
+            Text = "未打开",
+            AutoSize = true,
+            Font = UiTheme.UiFont(8.5f),
+            ForeColor = UiTheme.TextMuted,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 7, 0, 0),
+        };
+        headerLeft.Controls.Add(_stateDot);
+        headerLeft.Controls.Add(_portLabel);
+        headerLeft.Controls.Add(_stateLabel);
+        _openCloseButton = new ThemedButton
+        {
+            Text = "打开",
+            Kind = ThemedButtonKind.Primary,
+            Width = 72,
+            Height = 32,
+            Margin = new Padding(0),
+        };
         _openCloseButton.Click += OnOpenCloseClicked;
-        _recvTextRadio = new RadioButton { Text = "文本", Checked = true, AutoSize = true };
-        _recvHexRadio = new RadioButton { Text = "HEX", AutoSize = true };
+        header.Controls.Add(headerLeft, 0, 0);
+        header.Controls.Add(_openCloseButton, 1, 0);
+
+        // ---- 接收工具条:窄窗口自动折行,状态始终可见 ----
+        var toolbar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            WrapContents = true,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 8),
+        };
+        _recvTextRadio = new ChipRadio { Text = "文本", Checked = true, Margin = new Padding(0, 0, 8, 0) };
+        _recvHexRadio = new ChipRadio { Text = "HEX", Margin = new Padding(0, 0, 8, 0) };
         _recvTextRadio.CheckedChanged += (_, _) => ReRenderAll();
         _recvHexRadio.CheckedChanged += (_, _) => ReRenderAll();
-        _timestampCheck = new CheckBox { Text = "时间戳", AutoSize = true };
+        _timestampCheck = new ChipCheckBox { Text = "时间戳", Margin = new Padding(2, 0, 10, 0) };
         _timestampCheck.CheckedChanged += (_, _) => ReRenderAll();
         // 编码选择:GBK 兼容国内工位设备中文回显(SSCOM 的 ANSI 习惯);切换后从字节源重投影,无需重收
-        _encodingCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 80 };
-        _encodingCombo.Items.AddRange(["GBK", "UTF-8", "ASCII"]);
+        _encodingCombo = new ThemedSelect { Width = 88 };
+        _encodingCombo.AddRange("GBK", "UTF-8", "ASCII");
         _encodingCombo.SelectedIndex = 0;
         _encodingCombo.SelectedIndexChanged += (_, _) =>
         {
             _textRenderer = new TextRenderer(GetEncoding());
             ReRenderAll();
         };
-        var jumpLatestButton = new Button { Text = "跳到最新", Width = 76, Height = 24 };
+        var jumpLatestButton = new ThemedButton
+        {
+            Text = "跳到最新",
+            Kind = ThemedButtonKind.Outline,
+            Width = 86,
+            Height = 28,
+            Margin = new Padding(0, 0, 12, 0),
+        };
         jumpLatestButton.Click += (_, _) =>
         {
             _receiveBox.SelectionStart = _receiveBox.TextLength;
             _receiveBox.ScrollToCaret();
         };
-        var clearRecvButton = new Button { Text = "清除屏幕&&回滚", Width = 112, Height = 24 };
+        var clearRecvButton = new ThemedButton
+        {
+            Text = "清除屏幕",
+            Kind = ThemedButtonKind.Secondary,
+            Width = 86,
+            Height = 28,
+            Margin = new Padding(0, 0, 8, 0),
+        };
         clearRecvButton.Click += OnClearReceive;
-        _logCheck = new CheckBox { Text = "记录日志", AutoSize = true };
+        _logCheck = new SwitchCheckBox { Text = "记录日志" };
         _logCheck.CheckedChanged += OnLogToggled;
-        // 日志文件名常驻显示:状态栏是临时消息(会被滚动提示顶掉),路径在这里固定可见
-        _logPathLabel = new Label { Text = string.Empty, AutoSize = true, ForeColor = Color.ForestGreen };
-        _statusLabel = new Label { Text = "未打开", AutoSize = true, ForeColor = Color.DimGray };
 
-        toolbar.Controls.Add(_openCloseButton);
+        var modeDivider = new Panel { Width = 1, Height = 20, BackColor = UiTheme.Border, Margin = new Padding(4, 4, 12, 0) };
+        toolbar.Controls.Add(new Label
+        {
+            Text = "显示",
+            AutoSize = true,
+            Font = UiTheme.UiFont(8f),
+            ForeColor = UiTheme.TextMuted,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 8, 7, 0),
+        });
         toolbar.Controls.Add(_recvTextRadio);
+        toolbar.Controls.Add(_hexSpacer());
         toolbar.Controls.Add(_recvHexRadio);
+        toolbar.Controls.Add(modeDivider);
         toolbar.Controls.Add(_timestampCheck);
-        toolbar.Controls.Add(new Label { Text = " 编码:", AutoSize = true, Margin = new Padding(6, 6, 0, 0) });
+        toolbar.Controls.Add(new Label
+        {
+            Text = "编码",
+            AutoSize = true,
+            Font = UiTheme.UiFont(8f),
+            ForeColor = UiTheme.TextMuted,
+            BackColor = Color.Transparent,
+            Margin = new Padding(2, 8, 8, 0),
+        });
+        _encodingCombo.Margin = new Padding(0, 0, 12, 0);
         toolbar.Controls.Add(_encodingCombo);
         toolbar.Controls.Add(clearRecvButton);
         toolbar.Controls.Add(jumpLatestButton);
         toolbar.Controls.Add(_logCheck);
-        toolbar.Controls.Add(_logPathLabel);
-        toolbar.Controls.Add(_statusLabel);
 
-        _receiveBox = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BackColor = Color.White, Font = new Font("Times New Roman", 9.5f), DetectUrls = false };
+        // ---- 接收数据 ----
+        var receiveCard = new ThemedPanel
+        {
+            Dock = DockStyle.Fill,
+            FillColor = UiTheme.ReceiveBg,
+            BorderColor = UiTheme.Border,
+            OuterColor = UiTheme.Surface,
+            CornerRadius = 10,
+            Padding = new Padding(10, 8, 8, 8),
+            Margin = new Padding(0),
+        };
         // 悬停冻结已按用户要求取消(2026-10-23):鼠标停上面照样滚,只有滚轮/拖滚动条翻历史才停
+        _receiveBox = new RichTextBox
+        {
+            Dock = DockStyle.Fill,
+            ReadOnly = true,
+            BackColor = UiTheme.ReceiveBg,
+            ForeColor = Color.FromArgb(214, 226, 235),
+            BorderStyle = BorderStyle.None,
+            Font = new Font("Times New Roman", 10f),
+            DetectUrls = false,
+        };
+        receiveCard.Controls.Add(_receiveBox);
 
-        layout.Controls.Add(toolbar, 0, 0);
-        layout.Controls.Add(_receiveBox, 0, 1);
-        group.Controls.Add(layout);
-        return group;
+        // ---- 状态行 ----
+        var footer = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Height = 24,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 7, 0, 0),
+        };
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
+        _statusLabel = new Label
+        {
+            Text = "未打开",
+            AutoSize = false,
+            Dock = DockStyle.Fill,
+            Font = UiTheme.UiFont(8.25f),
+            ForeColor = UiTheme.TextMuted,
+            BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft,
+            AutoEllipsis = true,
+            Margin = new Padding(0),
+        };
+        // 日志文件名常驻显示:状态栏是临时消息(会被滚动提示顶掉),路径在这里固定可见
+        _logPathLabel = new Label
+        {
+            Text = string.Empty,
+            AutoSize = false,
+            Dock = DockStyle.Fill,
+            Font = UiTheme.UiFont(8.25f),
+            ForeColor = UiTheme.Accent,
+            BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleRight,
+            AutoEllipsis = true,
+            Margin = new Padding(0),
+        };
+        footer.Controls.Add(_statusLabel, 0, 0);
+        footer.Controls.Add(_logPathLabel, 1, 0);
+
+        layout.Controls.Add(header, 0, 0);
+        layout.Controls.Add(toolbar, 0, 1);
+        layout.Controls.Add(receiveCard, 0, 2);
+        layout.Controls.Add(footer, 0, 3);
+        card.Controls.Add(layout);
+        return card;
     }
 
+    private static Control _hexSpacer() => new Panel { Width = 6, Height = 1, BackColor = Color.Transparent, Margin = new Padding(0) };
     // ---------- 打开/关闭 ----------
 
     private void OnOpenCloseClicked(object? sender, EventArgs e)
@@ -179,7 +361,18 @@ internal sealed class SessionPanel : UserControl
                     return;
                 }
                 _openCloseButton.Text = state == SessionState.Open ? "关闭" : "打开";
+                _openCloseButton.Kind = state == SessionState.Open ? ThemedButtonKind.Secondary : ThemedButtonKind.Primary;
+                _portLabel.Text = DisplayPortName ?? "\u672A\u914D\u7F6E\u7AEF\u53E3";
                 var (text, color) = DescribeState(state);
+                _stateLabel.Text = text;
+                _stateLabel.ForeColor = UiTheme.StatusColor(color);
+                _stateDot.ForeColor = state switch
+                {
+                    SessionState.Open => UiTheme.Success,
+                    SessionState.Opening => UiTheme.Warning,
+                    SessionState.Error => UiTheme.Danger,
+                    _ => UiTheme.TextMuted,
+                };
                 UpdateStatus(text, color);
                 var portName = DisplayPortName;
                 TitleChanged?.Invoke(state switch
@@ -402,6 +595,10 @@ internal sealed class SessionPanel : UserControl
     public void PreselectConfig(PortConfig config)
     {
         _config = config;
+        _portLabel.Text = config.PortName;
+        _stateLabel.Text = "\u672A\u6253\u5F00";
+        _stateLabel.ForeColor = UiTheme.TextMuted;
+        _stateDot.ForeColor = UiTheme.TextMuted;
         TitleChanged?.Invoke($"{config.PortName}(未打开)");
     }
 
