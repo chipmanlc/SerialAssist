@@ -21,3 +21,6 @@ TestResults/
 
 # 运行时数据(便携 data 目录)
 data/
+
+# 安装包输出产物
+dist/

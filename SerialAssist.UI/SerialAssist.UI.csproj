@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\SerialAssist.Core\SerialAssist.Core.csproj" />
@@ -19,9 +19,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <AssemblyName>CHEN串口助手</AssemblyName>
-    <ApplicationTitle>CHEN串口助手</ApplicationTitle>
-    <Product>CHEN串口助手</Product>
+    <AssemblyName>LuckyC Serial Assist</AssemblyName>
+    <ApplicationTitle>LuckyC Serial Assist</ApplicationTitle>
+    <Product>LuckyC Serial Assist</Product>
   </PropertyGroup>
 
 </Project>

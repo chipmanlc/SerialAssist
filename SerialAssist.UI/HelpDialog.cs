@@ -32,7 +32,7 @@ internal sealed class HelpDialog : Form
         });
         header.Controls.Add(new Label
         {
-            Text = "USER MANUAL · CHEN SERIAL ASSISTANT",
+            Text = "USER MANUAL · LUCKY C SERIAL ASSIST",
             Dock = DockStyle.Bottom,
             Height = 20,
             Font = UiTheme.UiFont(7.5f, FontStyle.Bold),
@@ -91,7 +91,7 @@ internal sealed class HelpDialog : Form
     }
     private static void AppendManual(RichTextBox box)
     {
-        Heading("CHEN串口助手 使用说明");
+        Heading("LuckyC Serial Assist 使用说明");
         Blank();
 
         Heading("一、开始使用");
@@ -130,6 +130,7 @@ internal sealed class HelpDialog : Form
         Body("· 「单发」= 发勾选的帧;「连发」= 把勾选的帧按顺序各发一遍;「循环」= 反复发送,再点一次就停。");
         Body("· 每条帧可以设「发完后等多久再发下一条」,单位毫秒。");
         Body("· 双击一条帧可以修改,上下移按钮调整顺序。");
+        Body("· 数据帧会自动保存到 data\\frames.json，关闭软件后再次打开仍在。");
         Blank();
 
         Heading("五、状态栏提示是什么意思");

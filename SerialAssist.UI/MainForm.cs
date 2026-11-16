@@ -11,13 +11,14 @@ internal sealed class MainForm : Form
     private readonly SharedSendPanel _sharedSend;
     private readonly Dictionary<SessionPanel, DockContent> _sessionContents = new();
     private readonly List<SessionPanel> _sessionOrder = new(); // 创建顺序,平铺排版按它来(Dictionary 顺序不保证)
-    private readonly FrameStore _frames = new(); // 全软件一个帧列表,随主窗体存活
+    private readonly FrameStore _frames; // 全软件一个帧列表,随主窗体存活
+    private readonly string _framesPath;
     private Form? _frameForm; // 数据帧独立窗口(不进停靠体系,避免和串口窗口抢地方)
     private int _panelCount;
 
     public MainForm()
     {
-        Text = "CHEN串口助手";
+        Text = "LuckyC Serial Assist";
         Icon = TryLoadAppIcon();
         Size = new Size(1240, 840);
         MinimumSize = new Size(900, 620);
@@ -32,6 +33,15 @@ internal sealed class MainForm : Form
         ForeColor = UiTheme.Text;
         Font = UiTheme.UiFont();
         DoubleBuffered = true;
+
+        _framesPath = Path.Combine(AppPaths.DataDir, "frames.json");
+        _frames = new FrameStore();
+        foreach (var frame in FramePersistence.Load(_framesPath))
+        {
+            _frames.Add(frame);
+        }
+        _frames.Changed += (_, _) => FramePersistence.Save(_framesPath, _frames.Frames);
+        FormClosed += (_, _) => FramePersistence.Save(_framesPath, _frames.Frames);
 
         var header = BuildHeader();
 
@@ -115,7 +125,7 @@ internal sealed class MainForm : Form
         };
         titles.Controls.Add(new Label
         {
-            Text = "CHEN 串口助手",
+            Text = "LuckyC Serial Assist",
             AutoSize = true,
             Font = UiTheme.UiFont(13f, FontStyle.Bold),
             ForeColor = UiTheme.Text,
@@ -124,7 +134,7 @@ internal sealed class MainForm : Form
         }, 0, 0);
         titles.Controls.Add(new Label
         {
-            Text = "SERIAL WORKBENCH",
+            Text = "SERIAL ASSISTANT",
             AutoSize = true,
             Font = UiTheme.UiFont(7.5f, FontStyle.Bold),
             ForeColor = UiTheme.Accent,
