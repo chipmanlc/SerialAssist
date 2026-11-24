@@ -10,7 +10,7 @@ namespace SerialAssist.UI;
 /// 单串口面板:只含接收区(文本HEX即切/时间戳/日志)。
 /// 发送区已上移为窗口底部共享发送区(SharedSendPanel),勾选目标串口发送。
 /// 线程边界:session.DataReceived 在线程池线程 → pipeline.Push(线程安全);
-/// UI 只在 30ms 定时器里读快照渲染,永不直接跨线程碰控件。
+/// UI 只在 100ms 定时器里读快照渲染,永不直接跨线程碰控件。
 /// </summary>
 internal sealed class SessionPanel : UserControl
 {
@@ -39,6 +39,7 @@ internal sealed class SessionPanel : UserControl
     private const int LogBudgetPerTick = 4_000; // 单轮最多写日志行数,防洪流时写盘拖死 UI 线程(欠账下轮追)
     private SessionLogger? _logger;
     private bool _scrollBackHint;
+    private bool _followPaused;
     private float _savedZoom = 1f;
     private bool _zoomRestorePending;
     private bool _wasMinimized;
@@ -48,6 +49,7 @@ internal sealed class SessionPanel : UserControl
 
     private PortConfig? _config;
     private ThemedButton _openCloseButton = null!;
+    private ThemedButton _pauseFollowButton = null!;
     private RichTextBox _receiveBox = null!;
     private ChipRadio _recvTextRadio = null!;
     private ChipRadio _recvHexRadio = null!;
@@ -71,7 +73,7 @@ internal sealed class SessionPanel : UserControl
         _session.StateChanged += OnStateChanged;
         _session.DataReceived += OnDataReceived;
 
-        _renderTimer = new System.Windows.Forms.Timer { Interval = 30 };
+        _renderTimer = new System.Windows.Forms.Timer { Interval = 100 };
         _renderTimer.Tick += (_, _) => RenderNewEntries();
 
         BuildUi();
@@ -207,11 +209,16 @@ internal sealed class SessionPanel : UserControl
             Height = 28,
             Margin = new Padding(0, 0, 12, 0),
         };
-        jumpLatestButton.Click += (_, _) =>
+        jumpLatestButton.Click += (_, _) => ResumeFollowing();
+        _pauseFollowButton = new ThemedButton
         {
-            _receiveBox.SelectionStart = _receiveBox.TextLength;
-            _receiveBox.ScrollToCaret();
+            Text = "暂停滚动",
+            Kind = ThemedButtonKind.Outline,
+            Width = 92,
+            Height = 28,
+            Margin = new Padding(0, 0, 8, 0),
         };
+        _pauseFollowButton.Click += (_, _) => ToggleFollowPaused();
         var clearRecvButton = new ThemedButton
         {
             Text = "清除屏幕",
@@ -252,6 +259,7 @@ internal sealed class SessionPanel : UserControl
         toolbar.Controls.Add(_encodingCombo);
         toolbar.Controls.Add(clearRecvButton);
         toolbar.Controls.Add(jumpLatestButton);
+        toolbar.Controls.Add(_pauseFollowButton);
         toolbar.Controls.Add(_logCheck);
 
         // ---- 接收数据 ----
@@ -422,7 +430,7 @@ internal sealed class SessionPanel : UserControl
     }
 
     /// <summary>
-    /// 30ms 批量消费:按累计序列号定位新数据(背压丢最旧/清空都不会错位或假死),
+    /// 100ms 批量消费:按累计序列号定位新数据(背压丢最旧/清空都不会错位或假死),
     /// 日志与视图各自独立推进;渲染单轮有预算(RenderPolicy),洪流时视图聚合跳尾。
     /// 只有用户本在底部才跟随滚动。
     /// </summary>
@@ -504,12 +512,24 @@ internal sealed class SessionPanel : UserControl
             }
         }
 
+        if (_followPaused)
+        {
+            atBottom = false;
+        }
         if (!minimized)
         {
             _lastAtBottom = atBottom;
         }
 
-        if (!atBottom)
+        if (_followPaused)
+        {
+            if (!_scrollBackHint)
+            {
+                _scrollBackHint = true;
+                UpdateStatus("已暂停滚动", Color.DarkOrange);
+            }
+        }
+        else if (!atBottom)
         {
             if (!_scrollBackHint)
             {
@@ -609,6 +629,31 @@ internal sealed class SessionPanel : UserControl
     /// 空到非空的第一次 AppendText 又一次——当场还原无效,只能记下缩放值,
     /// 标记挂起,等下一拍追加数据后在 RenderNewEntries 里还原。
     /// </summary>
+    private void ToggleFollowPaused()
+    {
+        _followPaused = !_followPaused;
+        _pauseFollowButton.Text = _followPaused ? "继续跟随" : "暂停滚动";
+        _pauseFollowButton.Kind = _followPaused ? ThemedButtonKind.Secondary : ThemedButtonKind.Outline;
+        if (_followPaused)
+        {
+            UpdateStatus("已暂停滚动", Color.DarkOrange);
+            return;
+        }
+        ResumeFollowing();
+    }
+
+    private void ResumeFollowing()
+    {
+        _followPaused = false;
+        _pauseFollowButton.Text = "暂停滚动";
+        _pauseFollowButton.Kind = ThemedButtonKind.Outline;
+        _scrollBackHint = false;
+        _lastAtBottom = true;
+        _receiveBox.SelectionStart = _receiveBox.TextLength;
+        _receiveBox.ScrollToCaret();
+        UpdateStatus(string.Empty, Color.DimGray);
+    }
+
     private void ClearReceiveBoxPreserveZoom()
     {
         _savedZoom = _receiveBox.ZoomFactor;
