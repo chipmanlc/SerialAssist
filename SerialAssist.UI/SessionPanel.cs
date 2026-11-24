@@ -1,5 +1,6 @@
 using SerialAssist.Core;
 using SerialAssist.Transport;
+using System.Runtime.InteropServices;
 using System.Text;
 using TextRenderer = SerialAssist.Core.TextRenderer;
 
@@ -14,6 +15,18 @@ namespace SerialAssist.UI;
 internal sealed class SessionPanel : UserControl
 {
     private const int MaxViewChars = 4_000_000; // 接收区视图上限,超出清视图防 RichTextBox 拖垮 UI
+    private const int EmGetScrollPos = 0x0400 + 221;
+    private const int EmSetScrollPos = 0x0400 + 222;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref NativePoint lParam);
 
     private readonly SerialPortTransport _transport = new();
     private readonly SerialSession _session;
@@ -538,7 +551,17 @@ internal sealed class SessionPanel : UserControl
             sb.Append('\n');
         }
 
-        if (_receiveBox.TextLength + sb.Length > MaxViewChars)
+        var willClear = _receiveBox.TextLength + sb.Length > MaxViewChars;
+        var preserveView = !atBottom && !willClear && _receiveBox.IsHandleCreated;
+        var savedScroll = new NativePoint();
+        var savedSelectionStart = _receiveBox.SelectionStart;
+        var savedSelectionLength = _receiveBox.SelectionLength;
+        if (preserveView)
+        {
+            SendMessage(_receiveBox.Handle, EmGetScrollPos, IntPtr.Zero, ref savedScroll);
+        }
+
+        if (willClear)
         {
             ClearReceiveBoxPreserveZoom();
             UpdateStatus("视图过长已清屏(数据仍在管线中)", Color.DarkOrange);
@@ -561,6 +584,16 @@ internal sealed class SessionPanel : UserControl
         {
             _receiveBox.SelectionStart = _receiveBox.TextLength;
             _receiveBox.ScrollToCaret();
+        }
+        else if (preserveView)
+        {
+            // 追加文本会让有焦点的 RichTextBox 自动把 caret 拉到底部。
+            // 用户正在看历史时恢复原选区和滚动点,窗口激活/蓝框不影响回滚预览。
+            var textLength = _receiveBox.TextLength;
+            var selectionStart = Math.Min(savedSelectionStart, textLength);
+            _receiveBox.SelectionStart = selectionStart;
+            _receiveBox.SelectionLength = Math.Min(savedSelectionLength, textLength - selectionStart);
+            SendMessage(_receiveBox.Handle, EmSetScrollPos, IntPtr.Zero, ref savedScroll);
         }
     }
 
